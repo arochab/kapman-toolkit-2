@@ -39,6 +39,21 @@ Remaining backlog (ranked):
 - `index.html` — Vite entry point
 - `.env.example` — VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 
+## Shipping log
+- 2026-04-01: feat/bootstrap-v2 merged to main, pushed to origin. Build: 311kB JS, 1.29s. check: 0 errors. Deployment config missing — see next step below.
+
+## Deployment status
+**BLOCKED**: No Cloudflare Pages project is connected to this repo yet. No wrangler.toml, no GitHub Actions workflow, no Pages integration found. Manual setup required (see below).
+
+## Next phase audit (top 5)
+1. **No production deploy path** — CF Pages not connected; site is not live yet.
+2. **No save-analysis-to-project** — analyzer results are ephemeral, biggest product gap.
+3. **Silent failure states** — Supabase errors fail invisibly; user sees nothing.
+4. **No post-auth onboarding** — user lands on home after login with zero next-step guidance.
+5. **Recipes hardcoded** — library can only grow via code deploy; no CMS or admin layer.
+
+**Highest-leverage next improvement**: Connect Cloudflare Pages → deploy → then tackle save-analysis-to-project (closes the product flywheel: diagnose → recipe → save to project).
+
 ## To run
 ```bash
 npm install
