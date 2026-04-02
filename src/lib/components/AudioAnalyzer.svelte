@@ -2,14 +2,29 @@
   import { analyzeAudio, getRecommendations } from '../utils/audio.js';
   import type { AudioAnalysis } from '../utils/audio.js';
   import { recipes } from '../data/recipes.js';
-  import type { Recipe } from '../types/index.js';
+  import type { Recipe, Project } from '../types/index.js';
+  import { addProjectComment } from '../utils/db.js';
 
-  let { onOpenRecipe }: { onOpenRecipe?: (id: string) => void } = $props();
+  let {
+    onOpenRecipe,
+    user = null,
+    projects = []
+  }: {
+    onOpenRecipe?: (id: string) => void;
+    user?: { id: string; email?: string } | null;
+    projects?: Project[];
+  } = $props();
 
   let file = $state<File | null>(null);
   let result = $state<AudioAnalysis | null>(null);
   let loading = $state(false);
   let error = $state('');
+
+  // Save-to-project state — resets each time a new file is loaded
+  let selectedProjectId = $state('');
+  let savingSnapshot = $state(false);
+  let snapshotSaved = $state(false);
+  let snapshotError = $state('');
 
   async function handleFile(event: Event) {
     const target = event.target as HTMLInputElement;
@@ -19,6 +34,10 @@
     loading = true;
     result = null;
     error = '';
+    // Reset save state whenever a new file is loaded
+    selectedProjectId = '';
+    snapshotSaved = false;
+    snapshotError = '';
     try {
       result = await analyzeAudio(next);
     } catch (err) {
@@ -26,6 +45,36 @@
       error = 'Could not analyze this file. Try a standard WAV, MP3, or FLAC export.';
     } finally {
       loading = false;
+    }
+  }
+
+  // Builds a plain-text analysis snapshot and posts it as a project comment.
+  // This is the persistence step in the flywheel: analyze → save → revisit in project.
+  async function saveSnapshot() {
+    if (!user || !result || !diagnostics || !selectedProjectId) return;
+    savingSnapshot = true;
+    snapshotError = '';
+    snapshotSaved = false;
+
+    const issueList = diagnostics.issues.map(i => i.title).join(', ');
+    const recipeList = diagnostics.suggestions.map(r => r.title).join(', ');
+    const text = [
+      `[Analysis] ${file?.name ?? 'unknown'}`,
+      `Verdict: ${diagnostics.verdict}`,
+      `LUFS ${result.lufsEstimate} | True peak ${result.truePeakEstimate} dBTP | Phase ${result.phaseCorrelation}`,
+      issueList ? `Issues: ${issueList}` : null,
+      recipeList ? `Suggested recipes: ${recipeList}` : null,
+    ].filter(Boolean).join('\n');
+
+    try {
+      await addProjectComment(selectedProjectId, user.email ?? 'unknown', text);
+      snapshotSaved = true;
+      // Auto-dismiss success message after 4 s so the UI stays clean
+      setTimeout(() => { snapshotSaved = false; }, 4000);
+    } catch (err) {
+      snapshotError = err instanceof Error ? err.message : 'Could not save. Try again.';
+    } finally {
+      savingSnapshot = false;
     }
   }
 
@@ -281,6 +330,39 @@
               </article>
             {/each}
           </div>
+        </section>
+      {/if}
+
+      {#if user && projects.length > 0}
+        <!-- Save-to-project: pins this analysis as a comment so it survives beyond this session -->
+        <section class="surface" style="border-radius:24px; padding:1.1rem; display:grid; gap:.75rem;">
+          <div class="eyebrow">Save snapshot to project</div>
+          <p class="section-copy" style="font-size:.9rem;">Pin this analysis result to a project so you can reference it later.</p>
+          <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
+            <select
+              bind:value={selectedProjectId}
+              class="surface-strong"
+              style="flex:1; min-width:180px; padding:.55rem .75rem; border-radius:12px; font-size:.9rem; border:none; color:var(--color-text); cursor:pointer;"
+            >
+              <option value="">Choose a project…</option>
+              {#each projects as project (project.id)}
+                <option value={project.id}>{project.name}</option>
+              {/each}
+            </select>
+            <button
+              class="btn btn-primary"
+              disabled={!selectedProjectId || savingSnapshot}
+              onclick={saveSnapshot}
+            >
+              {savingSnapshot ? 'Saving…' : 'Save snapshot'}
+            </button>
+          </div>
+          {#if snapshotSaved}
+            <div style="color:var(--color-ok); font-size:.88rem; font-weight:600;">Snapshot saved to project.</div>
+          {/if}
+          {#if snapshotError}
+            <div style="color:var(--color-warn); font-size:.88rem;">{snapshotError}</div>
+          {/if}
         </section>
       {/if}
 

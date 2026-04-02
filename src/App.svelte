@@ -211,7 +211,8 @@
           onAddToProject={(projectId) => handleAddToProject(projectId, routeParam!)}
         />
       {:else if route === 'analyzer'}
-        <AudioAnalyzer onOpenRecipe={(id) => navigate('recipe-detail', id)} />
+        <!-- Pass user + projects so the analyzer can save snapshots to project comments -->
+        <AudioAnalyzer onOpenRecipe={(id) => navigate('recipe-detail', id)} {user} {projects} />
       {:else if route === 'projects'}
         <Projects {user} {projects} onNavigate={navigate} onProjectsChanged={handleProjectsChanged} />
       {:else if route === 'project-detail' && routeParam}

@@ -26,7 +26,7 @@ Top 7 issues identified, first 3 addressed:
 3. [x] RecipeCard category pill only activated on "mixing" — all categories now styled
 
 Remaining backlog (ranked):
-4. [ ] No save-analysis-to-project — analyzer results are ephemeral
+4. [x] Save-analysis-to-project — snapshot posted as a project comment (verdict, metrics, issues, recipes)
 5. [ ] No user-visible error states — silent Supabase failures
 6. [ ] No post-auth first-step guidance — user lands on home after login with no next step
 7. [ ] Recipes hardcoded — can't grow library without a code deploy
@@ -40,6 +40,7 @@ Remaining backlog (ranked):
 - `.env.example` — VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 
 ## Shipping log
+- 2026-04-02: feat/save-analysis closed. Analyzer now saves snapshots to project comments. Build: 314kB JS, 1.82s. check: 0 errors.
 - 2026-04-01: feat/bootstrap-v2 merged to main, pushed to origin. Build: 311kB JS, 1.29s. check: 0 errors. Deployment config missing — see next step below.
 
 ## Deployment status
@@ -47,7 +48,7 @@ Remaining backlog (ranked):
 
 ## Next phase audit (top 5)
 1. **No production deploy path** — CF Pages not connected; site is not live yet.
-2. **No save-analysis-to-project** — analyzer results are ephemeral, biggest product gap.
+2. ~~No save-analysis-to-project~~ — DONE (2026-04-02)
 3. **Silent failure states** — Supabase errors fail invisibly; user sees nothing.
 4. **No post-auth onboarding** — user lands on home after login with zero next-step guidance.
 5. **Recipes hardcoded** — library can only grow via code deploy; no CMS or admin layer.
