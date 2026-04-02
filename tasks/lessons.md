@@ -43,6 +43,14 @@ The `bundler` option (TS 5.0+) matches Vite's actual resolution behavior.
 Vite only exposes env vars prefixed `VITE_` to client code via `import.meta.env`.
 Using non-prefixed vars silently returns `undefined` at runtime.
 
+## Svelte 5 forbids reassigning exported module $state
+When using `$state` at module level in a `.svelte.ts` file and exporting it, you must never
+reassign the variable — Svelte 5 will throw a compile error: "Cannot export state from a
+module if it is reassigned."
+Fix: mutate the value in place. For arrays, use `.push()` and `.splice()` instead of
+`arr = arr.filter(...)`. This keeps the same reactive proxy reference and satisfies the
+compiler.
+
 ## Scaffold state early, wire UI later — but finish before merging
 State variables and imports were declared in AudioAnalyzer ahead of the UI and handler.
 This is fine as a pattern, but it created a working build with dead props (`user`, `projects`)
