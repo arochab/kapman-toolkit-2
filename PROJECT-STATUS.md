@@ -27,7 +27,7 @@ Top 7 issues identified, first 3 addressed:
 
 Remaining backlog (ranked):
 4. [x] Save-analysis-to-project — snapshot posted as a project comment (verdict, metrics, issues, recipes)
-5. [ ] No user-visible error states — silent Supabase failures
+5. [x] No user-visible error states — global toast system added (toast.svelte.ts + Toast.svelte), all silent catch blocks now surface errors; note save + add-to-project also show success confirmation
 6. [ ] No post-auth first-step guidance — user lands on home after login with no next step
 7. [ ] Recipes hardcoded — can't grow library without a code deploy
 
@@ -40,6 +40,7 @@ Remaining backlog (ranked):
 - `.env.example` — VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 
 ## Shipping log
+- 2026-04-02: feat/toast-errors closed. Global toast system added. All silent Supabase failures now surface to the user. Build: 317kB JS, 1.38s. check: 0 errors.
 - 2026-04-02: feat/save-analysis closed. Analyzer now saves snapshots to project comments. Build: 314kB JS, 1.82s. check: 0 errors.
 - 2026-04-01: feat/bootstrap-v2 merged to main, pushed to origin. Build: 311kB JS, 1.29s. check: 0 errors. Deployment config missing — see next step below.
 

@@ -3,7 +3,9 @@
   import { supabase } from './lib/supabase/client.js';
   import type { Route, Project, UserRecipeNote } from './lib/types/index.js';
   import { getFavorites, toggleFavorite, getNotes, saveNote, getProjects, getProjectRecipes, addRecipeToProject } from './lib/utils/db.js';
+  import { toast } from './lib/utils/toast.svelte.js';
   import Nav from './lib/components/Nav.svelte';
+  import Toast from './lib/components/Toast.svelte';
   import Home from './lib/components/Home.svelte';
   import RecipeList from './lib/components/RecipeList.svelte';
   import RecipeDetail from './lib/components/RecipeDetail.svelte';
@@ -64,6 +66,7 @@
       favorites = isFav ? favorites.filter((id) => id !== recipeId) : [...favorites, recipeId];
     } catch (error) {
       console.error('Favorite toggle failed:', error);
+      toast('Could not update favorites. Check your connection and try again.');
     }
   }
 
@@ -72,8 +75,10 @@
     try {
       await saveNote(user.id, recipeId, content);
       notes = await getNotes(user.id);
+      toast('Note saved.', 'success', 3000);
     } catch (error) {
       console.error('Note save failed:', error);
+      toast('Note could not be saved. Check your connection.');
     }
   }
 
@@ -85,8 +90,10 @@
         ...projectRecipeMap,
         [projectId]: existing.includes(recipeId) ? existing : [...existing, recipeId]
       };
+      toast('Recipe added to project.', 'success', 3000);
     } catch (error) {
       console.error('Add to project failed:', error);
+      toast('Could not add to project. Try again.');
     }
   }
 
@@ -102,6 +109,7 @@
       projectRecipeMap = Object.fromEntries(entries);
     } catch (error) {
       console.error('Projects refresh failed:', error);
+      toast('Could not refresh projects. Check your connection.');
     }
   }
 
@@ -110,6 +118,7 @@
       projectRecipeMap = { ...projectRecipeMap, [projectId]: await getProjectRecipes(projectId) };
     } catch (error) {
       console.error('Project recipe refresh failed:', error);
+      toast('Could not refresh project recipes.');
     }
   }
 
@@ -118,6 +127,7 @@
       await supabase.auth.signOut();
     } catch (error) {
       console.error('Sign out failed:', error);
+      toast('Sign out failed. You have been logged out locally.');
     } finally {
       clearUserData();
       navigate('home');
@@ -181,6 +191,7 @@
   });
 </script>
 
+<Toast />
 <div class="page-shell">
   {#if loading}
     <div class="page-container" style="display:grid; place-items:center; min-height:100dvh;">

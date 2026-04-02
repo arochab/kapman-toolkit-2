@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Route, Project } from '../types/index.js';
   import { createProject, deleteProject } from '../utils/db.js';
+  import { toast } from '../utils/toast.svelte.js';
   import Auth from './Auth.svelte';
 
   let { user, projects, onNavigate, onProjectsChanged }: {
@@ -27,6 +28,7 @@
       await onProjectsChanged();
     } catch (error) {
       console.error('Create project failed:', error);
+      toast('Could not create project. Check your connection.');
     } finally {
       creating = false;
     }
@@ -39,6 +41,7 @@
       await onProjectsChanged();
     } catch (error) {
       console.error('Delete project failed:', error);
+      toast('Could not delete project. Try again.');
     }
   }
 
