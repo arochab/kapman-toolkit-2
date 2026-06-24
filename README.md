@@ -75,7 +75,7 @@ CuePoint runs a real signal-analysis pass on your track — **no upload, no serv
         │  metrics → one priority need   (score.ts · genre-aware)
         ▼
    needRoutes.ts  ──►  the matching plugin-chain recipe
-   (low-end · phase · top-end · loudness · ready?)   (deterministic · no bluff)
+   (low-end · phase · top-end · loudness · character)   (deterministic · no bluff)
 ```
 
 1. **The browser is the only machine.** `analyzeAudio()` decodes into an `OfflineAudioContext` and runs the full DSP locally, yielding a stage callback that drives an *honest* 4-step progress bar (decode → loudness → true peak → spectrum) — it reaches 100% only when the result is actually ready.
