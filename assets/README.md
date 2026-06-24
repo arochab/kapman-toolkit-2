@@ -1,9 +1,13 @@
-# Screenshots
+# assets
 
-Drop the three captures here (taken in a real browser — the WebGL droplet renders fine there):
+Visuals used by the README, all committed and working — nothing to do.
 
-- `shot-home.png` — the door: breathing droplet + "Dépose ton son."
-- `shot-listening.png` — analysis: droplet pulsing cyan + the 4-stage stepper
-- `shot-verdict.png` — the hero shot: the verdict word + FR fix sentence + honesty receipt
+- `demo.gif` — the real Cue droplet, animated (converted from a screen recording via `make-gif.ps1`). Hero of the README.
+- `readme-triptych.svg` — the drop → listen → fix flow, full-width under the GIF.
+- `ig-post.svg` — the verdict mockup (square 1080×1080), also reused for Instagram.
+- `ig-story.svg` — Instagram story (9:16, 1080×1920).
+- `make-gif.ps1` — converts any screen recording to an optimized README GIF: `pwsh assets/make-gif.ps1 <video> assets/demo.gif`.
 
-Recommended: ~1200px wide, landscape (16:10), PNG. The repo README references these paths.
+## Want to swap in real screenshots later?
+
+Replace `ig-post.svg` in the README with a real PNG: drop `shot-verdict.png` here (Win+Shift+S on the verdict screen) and point the README `<img>` at it. Optional — the current visuals are ship-ready.

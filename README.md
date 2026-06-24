@@ -17,8 +17,12 @@
 </p>
 
 <p align="center">
-  <a href="{{LIVE_URL}}"><b>→ Open the live app</b></a> ·
+  <a href="https://cuepoint-mu.vercel.app"><b>→ Open the live app</b></a> ·
   <a href="https://github.com/arochab/cuepoint">Source</a>
+</p>
+
+<p align="center">
+  <img src="assets/demo.gif" alt="Cue — the living, audio-reactive droplet" width="470">
 </p>
 
 <p align="center">
@@ -51,7 +55,7 @@ Every producer knows the moment: the track is *almost* there, something is off, 
 </table>
 
 <p align="center">
-  <img src="assets/ig-post.svg" alt="CuePoint verdict — PRESQUE, one fix, and the honesty receipt" width="60%">
+  <img src="assets/ig-post.svg" alt="CuePoint verdict — one fix, and the honesty receipt" width="58%">
 </p>
 
 ## How it works
