@@ -448,3 +448,10 @@ export function getRecommendations(a: AudioAnalysis): string[] {
   if (recs.length === 0) recs.push('✅ Metrics look healthy. Still worth comparing against your reference track.');
   return recs;
 }
+
+// ---------------------------------------------------------------------------
+// Test-only surface. These pure DSP helpers are exercised by the golden-value
+// unit tests (src/lib/utils/audio.test.ts) without the browser AudioContext.
+// Not part of the app's public API — the app uses analyzeAudio().
+// ---------------------------------------------------------------------------
+export const __dsp = { computeIntegratedLufs, computeTruePeak, computeSpectrum };
