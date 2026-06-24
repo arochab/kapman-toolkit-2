@@ -48,8 +48,10 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
 
   // --- penalties (points off 100) ---
   let off = 0;
-  // True peak over the ceiling is the one hard technical fault.
-  if (a.truePeakEstimate > -1) off += clamp((a.truePeakEstimate + 1) * 14, 0, 24);
+  // True peak above -1 dBTP costs points (it's the streaming-headroom recommendation),
+  // but gently: a -0.3..-0.8 dBTP master is a normal, intentional club level, not a defect.
+  // Slope 10 / cap 20 (was 14/24) so a clean loud master still clears to SHIP.
+  if (a.truePeakEstimate > -1) off += clamp((a.truePeakEstimate + 1) * 10, 0, 20);
   // Loudness vs the genre's release zone (gentle - quiet is fine for an unfinished mix).
   off += clamp(rangePenalty(a.lufsEstimate, g.lufs, 2.2), 0, 16);
   // Tonal balance vs genre targets.
@@ -61,7 +63,12 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   const score = Math.round(clamp(100 - off, 1, 100));
 
   // --- verdict bands ---
-  const hardFault = a.truePeakEstimate > -1 || a.phaseCorrelation < 0;
+  // A hard fault is an INSTANT worst-tier ("NOT YET"), bypassing the score. Only genuine
+  // defects qualify: real mono cancellation (phase < 0) or a grossly clipping export
+  // (> 2 dBTP). A true peak of -1..+2 is a hot-but-intentional master — it loses points
+  // above and is flagged in the receipt, but is NOT auto-condemned. (Before, any TP > -1
+  // forced NOT YET, so every loud club/techno master failed regardless of quality.)
+  const hardFault = a.phaseCorrelation < 0 || a.truePeakEstimate > 2.0;
   let verdict: Verdict;
   if (hardFault || score < 55) verdict = 'work';
   else if (score < 80) verdict = 'almost';
