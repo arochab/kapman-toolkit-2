@@ -117,6 +117,7 @@ Not a theme on top of an app; the app *is* the design.
 ## Run it locally
 
 ```bash
+# Node 22+ (svelte-check 4.4+ needs module.registerHooks); see .nvmrc
 git clone https://github.com/arochab/cuepoint.git
 cd cuepoint
 npm install
