@@ -21,7 +21,7 @@
     idle: 'idle', listening: 'analyzing', thinking: 'one', happy: 'send', worried: 'not'
   };
 
-  let canvas: HTMLCanvasElement;
+  let canvas: HTMLCanvasElement = $state()!;  // bound via bind:this — declared $state so Svelte 5 tracks it
   // The Three.js engine (~1MB) is loaded ON DEMAND when Cue first mounts, so the initial
   // page stays light. Type is the module's return shape.
   let api: { setVerdict: (v: CueVerdict) => void; setEnergy?: (e: number) => void; dispose: () => void } | null = null;

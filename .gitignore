@@ -34,3 +34,13 @@ Thumbs.db
 
 # cycle runner state (local only - not shared)
 reports/.cycle-count
+
+# Internal scaffolding — kept local, never published
+PROJECT-STATUS.md
+COMMS.md
+GO-LIVE-CHECKLIST.md
+SETUP.md
+tasks/
+scripts/
+.claude/wf-*.js
+.tmp-dsp/
