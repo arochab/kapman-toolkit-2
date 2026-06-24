@@ -409,7 +409,7 @@
       <p class="receipt mono reveal" style="--i:3;">{receipt}</p>
 
       <div class="actions reveal" style="--i:4;">
-        <button class="link tide" onclick={() => showFix = true}>{t('an.walkMeThrough')} →</button>
+        {#if topFix?.type !== 'healthy'}<button class="link tide" onclick={() => showFix = true}>{t('an.walkMeThrough')} →</button>{/if}
         <button class="link" onclick={() => showMore = !showMore}>{showMore ? t('an.hide') : t('an.numbers')}</button>
         <button class="link" onclick={() => showCold = true}>{t('home.knowAlready')}</button>
       </div>

@@ -114,6 +114,8 @@ export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: stri
 // what Cue actually heard, built from real measurements. e.g.
 //   FR: "entendu : bas +6 dB · phase ok · pic -0.4 dB"
 export function honestyReceipt(mix: MixScore, a: AudioAnalysis): string {
+  // Deliberately inline (not in the t() dict): this interpolates measured NUMBERS
+  // (lowGap, true peak, LUFS) into a tiny template, not static UI prose.
   const loc = i18n.locale;
   const lowGap = Math.round(a.lowEnergy - a.midEnergy);
   const lowTxt = (loc === 'fr' ? 'bas ' : 'low ') + (lowGap >= 0 ? '+' : '') + lowGap + ' dB';

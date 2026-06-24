@@ -32,8 +32,8 @@ Thumbs.db
 *.head
 *.orig
 
-# cycle runner state (local only - not shared)
-reports/.cycle-count
+# cycle runner state + reports (local only - not shared)
+reports/
 
 # Internal scaffolding — kept local, never published
 PROJECT-STATUS.md

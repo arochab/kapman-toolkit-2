@@ -160,4 +160,13 @@ describe('spectrum (bandwidth-normalized) tilt', () => {
     const s = shapedNoise(-4.5, 1 << 17);
     expect(computeSpectrum(s, s, s.length, FS).spectralTiltDbPerOct).toBeCloseTo(-4.5, 0);
   });
+  // Locks topEndDeficit()'s AND-gate: the "dull top" card requires highGap below the genre
+  // floor AND tilt < -6. A SHALLOW tilt (> -6) must NOT also produce a highGap below the
+  // floor — otherwise the AND-gate could misfire. This pins the DSP so the gate stays sound.
+  it('a shallow-tilt master does not produce a below-floor highGap (topEndDeficit AND-gate)', () => {
+    const shallow = shapedNoise(-5.5, 1 << 17);                 // tilt ~ -5.5 (shallower than -6)
+    const r = computeSpectrum(shallow, shallow, shallow.length, FS);
+    expect(r.spectralTiltDbPerOct).toBeGreaterThan(-6);        // confirm the input slope held
+    expect(r.highEnergy - r.midEnergy).toBeGreaterThan(-24);   // not below the steepest genre floor
+  });
 });

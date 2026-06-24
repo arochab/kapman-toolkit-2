@@ -94,8 +94,10 @@ describe('no-bluff invariant — swept across all genres + every card axis', () 
     it(`${g}: no SHIP ever coexists with a medium/high fix card (all axes swept)`, () => {
       const gt = GENRES.find((x) => x.id === g)!;
       const mid = -50;
-      for (let lowGap = gt.lowGap[0] - 6; lowGap <= gt.lowGap[1] + 6; lowGap += 3)
-      for (let highGap = gt.highGap[0] - 6; highGap <= gt.highGap[1] + 6; highGap += 4)
+      // 1 dB lowGap / 2 dB highGap steps over ±3 around each genre's [floor,ceiling] so every
+      // card-threshold boundary is hit exactly (the ±2 hysteresis lives inside this band).
+      for (let lowGap = gt.lowGap[0] - 3; lowGap <= gt.lowGap[1] + 3; lowGap += 1)
+      for (let highGap = gt.highGap[0] - 3; highGap <= gt.highGap[1] + 3; highGap += 2)
       for (const phase of PHASES) for (const pmin of PMINS) for (const tilt of TILTS) for (const tp of TPS) {
         const a = mk({ lufsEstimate: (gt.lufs[0] + gt.lufs[1]) / 2, truePeakEstimate: tp,
           phaseCorrelation: phase, phaseCorrelationMin: Math.min(phase, pmin),
