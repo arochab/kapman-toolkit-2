@@ -7,6 +7,7 @@
 
 import type { AudioAnalysis } from '../utils/audio.js';
 import { genreById, type GenreId, type GenreTarget } from './genres.js';
+import { TP_CLIP_DBTP, PHASE_SECTION_CANCEL } from './issueTypes.js';
 
 export type Verdict = 'ship' | 'almost' | 'work';
 export type FaceMood = 'happy' | 'thinking' | 'worried';
@@ -64,19 +65,19 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   // A SECTION that collapses in mono (whole-file reads safe but one window is well negative)
   // must cost points too — otherwise the score stays high while diagnostics raises a
   // high-severity "a section cancels in mono" card. Mirrors diagnostics.ts's sectionCancels.
-  const sectionCancels = a.phaseCorrelationMin < -0.25 && a.phaseCorrelation >= 0;
+  const sectionCancels = a.phaseCorrelationMin < PHASE_SECTION_CANCEL && a.phaseCorrelation >= 0;
   if (sectionCancels) off += clamp((-a.phaseCorrelationMin) * 30, 0, 22);
 
   const score = Math.round(clamp(100 - off, 1, 100));
 
   // --- verdict bands ---
-  // A hard fault is an INSTANT worst-tier ("NOT YET"), bypassing the score. Only genuine
-  // defects qualify: real mono cancellation (phase < -0.1, not a hair below 0), a section
-  // that collapses in mono (sectionCancels), or a grossly clipping export (> 2 dBTP). A
-  // true peak of -1..+2 is a hot-but-intentional master — it loses points and is flagged in
-  // the receipt, but is NOT auto-condemned. The sectionCancels term keeps the headline from
-  // ever reading SHIP while diagnostics shows a high-severity "a section cancels in mono" card.
-  const hardFault = a.phaseCorrelation < -0.1 || sectionCancels || a.truePeakEstimate > 2.0;
+  // A hard fault is an INSTANT worst-tier ("NOT YET"), bypassing the score: real mono
+  // cancellation (phase < -0.1), a section that collapses in mono (sectionCancels), or a
+  // true peak OVER +1 dBTP (it genuinely clips on lossy encode — and that is exactly where
+  // diagnostics.ts turns the headroom card HIGH-severity, so verdict and card agree). A peak
+  // of 0..+1 is hot-but-shippable: a low-severity note, points lost, but not condemned —
+  // matching the low-severity card there. (See TP_CLIP_DBTP, shared with diagnostics/issueText.)
+  const hardFault = a.phaseCorrelation < -0.1 || sectionCancels || a.truePeakEstimate > TP_CLIP_DBTP;
   let verdict: Verdict;
   if (hardFault || score < 55) verdict = 'work';
   else if (score < 80) verdict = 'almost';

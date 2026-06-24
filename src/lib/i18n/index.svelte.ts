@@ -302,11 +302,21 @@ function detectInitial(): Locale {
   return 'fr';
 }
 
+// Keep <html lang> tracking the resolved locale so the markup is honest for screen
+// readers / SEO (the UI is FR-default; index.html ships lang="fr", but a stored EN
+// choice must update the attribute too — on first paint and on every toggle).
+function syncHtmlLang(loc: Locale): void {
+  try { document.documentElement.lang = loc; } catch { /* SSR/no-DOM: non-fatal */ }
+}
+
 // The exported reactive object. Mutate i18n.locale; never reassign i18n itself.
-export const i18n = $state<{ locale: Locale }>({ locale: detectInitial() });
+const initialLocale = detectInitial();
+export const i18n = $state<{ locale: Locale }>({ locale: initialLocale });
+syncHtmlLang(initialLocale);
 
 export function setLocale(next: Locale): void {
   i18n.locale = next; // in-place mutation — safe for an exported $state object property
+  syncHtmlLang(next);
   try { localStorage.setItem(STORAGE_KEY, next); } catch { /* non-fatal */ }
 }
 

@@ -69,23 +69,30 @@ function headroomCard(a: AudioAnalysis) {
 }
 const saysClip = (s: string) => /clip|clipper/.test(s.toLowerCase());
 
-describe('the no-bluff invariant — headroom sentence and card never disagree', () => {
-  it.each([0.1, 0.3, 0.5, 1.0, 1.5, 2.0])('TP +%s dBTP: card is high-severity AND sentence warns of clipping (aligned)', (tp) => {
+describe('the no-bluff invariant — headroom sentence, card and verdict never disagree', () => {
+  // > +1 dBTP genuinely clips: HIGH-severity card, hard-clip sentence, verdict can't ship.
+  it.each([1.5, 2.0, 3.0])('TP +%s dBTP: card high-severity, sentence warns clip, verdict NOT ship (all agree)', (tp) => {
     const a = mk({ truePeakEstimate: tp });
-    const card = headroomCard(a);
-    expect(card?.severity).toBe('high');               // card screams "over the ceiling"
-    expect(saysClip(issueSummary('headroom', a, scoreMix(a, 'techno').verdict))).toBe(true); // sentence agrees
+    expect(headroomCard(a)?.severity).toBe('high');
+    expect(saysClip(issueSummary('headroom', a, scoreMix(a, 'techno').verdict))).toBe(true);
+    expect(scoreMix(a, 'techno').verdict).not.toBe('ship');
   });
-  it.each([-0.3, -0.5, -0.9])('TP %s dBTP: hot-but-safe — card is low-severity AND sentence does NOT say clip (aligned)', (tp) => {
+  // 0..+1 dBTP: over the ceiling but shippable — LOW-severity card, soft "can clip" note, still ships.
+  it.each([0.1, 0.5, 1.0])('TP +%s dBTP: card low-severity, sentence says "can clip", verdict still ships (all agree)', (tp) => {
+    const a = mk({ truePeakEstimate: tp, lufsEstimate: -8, lowEnergy: -30, midEnergy: -52, highEnergy: -67 });
+    expect(headroomCard(a)?.severity).toBe('low');
+    expect(saysClip(issueSummary('headroom', a, scoreMix(a, 'techno').verdict))).toBe(true); // honest: over 0 can clip
+    expect(scoreMix(a, 'techno').verdict).toBe('ship');
+  });
+  it.each([-0.3, -0.5, -0.9])('TP %s dBTP: hot-but-safe — card low-severity AND sentence does NOT say clip (aligned)', (tp) => {
     const a = mk({ truePeakEstimate: tp });
-    const card = headroomCard(a);
-    expect(card?.severity).toBe('low');
+    expect(headroomCard(a)?.severity).toBe('low');
     expect(saysClip(issueSummary('headroom', a, scoreMix(a, 'techno').verdict))).toBe(false);
   });
-  it('the real reference master (+0.11 dBTP) is consistent: card high, sentence warns clip, verdict still SHIP', () => {
-    expect(headroomCard(BAGATELLE)?.severity).toBe('high');
+  it('the real reference master (+0.11 dBTP) is consistent: card LOW, sentence "can clip", verdict still SHIP', () => {
+    expect(headroomCard(BAGATELLE)?.severity).toBe('low');
     expect(saysClip(issueSummary('headroom', BAGATELLE, scoreMix(BAGATELLE, 'other').verdict))).toBe(true);
-    expect(scoreMix(BAGATELLE, 'other').verdict).toBe('ship'); // a small +0.1 peak doesn't condemn the whole master
+    expect(scoreMix(BAGATELLE, 'other').verdict).toBe('ship'); // +0.1 is over 0 but doesn't condemn the master
   });
   it('a wide-but-positive master never says "parts cancel"', () => {
     const wide = mk({ phaseCorrelation: 0.15, phaseCorrelationMin: 0.1 });

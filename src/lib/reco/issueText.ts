@@ -4,7 +4,7 @@
 //
 // EN strings are provided too so the FR/EN toggle stays honest end-to-end.
 
-import type { IssueType } from './issueTypes.js';
+import { type IssueType, TP_CEILING_DBTP, TP_CLIP_DBTP, PHASE_SECTION_CANCEL } from './issueTypes.js';
 import type { AudioAnalysis } from '../utils/audio.js';
 import type { MixScore } from './score.js';
 import { i18n } from '../i18n/index.svelte.js';
@@ -45,6 +45,13 @@ const SUMMARY: Record<IssueType, Bi> = {
 };
 
 // State-aware overrides keyed on the real measurement.
+// Two headroom variants, tier-matched to the card (diagnostics.ts) and the verdict (score.ts):
+//   > TP_CLIP_DBTP : genuinely clips (the card is HIGH-severity, the verdict can't ship)
+//   0..TP_CLIP     : over 0, can clip on encode — a real but small note (still ships)
+const HEADROOM_HARDCLIP: Bi = {
+  fr: 'Ton true peak dépasse le plafond — à l’encodage, ça va clipper. Baisse le ceiling à -1 dBTP.',
+  en: 'Your true peak is over the ceiling — it will clip once encoded. Drop the ceiling to -1 dBTP.',
+};
 const HEADROOM_CLIP: Bi = {
   fr: 'Ton true peak passe au-dessus de 0 — à l’encodage lossy, ça peut clipper. Ramène le ceiling à -1 dBTP.',
   en: 'Your true peak is over 0 — it can clip on lossy encoding. Set the ceiling to -1 dBTP.',
@@ -66,15 +73,17 @@ export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: stri
   const loc = i18n.locale;
   if (a) {
     if (issue === 'headroom') {
-      // ALIGNED with the headroom card (diagnostics.ts: card is high-severity at TP > 0).
-      // The sentence and the card must agree: over 0 dBTP genuinely can clip on lossy
-      // encode, so say so — even on a SHIP master (a +0.1 peak is a real, if small, fault).
-      // -1..0 is hot-but-safe -> the gentle last-call note.
-      return (a.truePeakEstimate > 0 ? HEADROOM_CLIP : SUMMARY.headroom)[loc];
+      // Tier-matched to the card + verdict (shared TP_CLIP_DBTP / TP_CEILING_DBTP):
+      //   > +1 dBTP -> "it WILL clip" (high-severity card, verdict can't ship)
+      //   0..+1     -> "can clip on encode" (low-severity note, still ships)
+      //   -1..0     -> hot-but-safe last-call note
+      if (a.truePeakEstimate > TP_CLIP_DBTP) return HEADROOM_HARDCLIP[loc];
+      if (a.truePeakEstimate > TP_CEILING_DBTP) return HEADROOM_CLIP[loc];
+      return SUMMARY.headroom[loc];
     }
     if (issue === 'phase') {
       if (a.phaseCorrelation < 0) return PHASE_CANCEL[loc];
-      if (a.phaseCorrelationMin < -0.25) return PHASE_SECTION[loc];
+      if (a.phaseCorrelationMin < PHASE_SECTION_CANCEL) return PHASE_SECTION[loc];
       return SUMMARY.phase[loc];   // wide-but-positive
     }
   }

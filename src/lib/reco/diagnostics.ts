@@ -5,7 +5,7 @@
 // never contradict each other (the no-bluff invariant).
 
 import type { AudioAnalysis } from '../utils/audio.js';
-import type { IssueType } from './issueTypes.js';
+import { type IssueType, TP_CEILING_DBTP, TP_CLIP_DBTP, PHASE_SECTION_CANCEL } from './issueTypes.js';
 import type { Recipe } from '../types/index.js';
 import { genreById, type GenreId } from './genres.js';
 import { suggestionsForIssues } from './needRoutes.js';
@@ -30,15 +30,20 @@ export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): D
   // A section genuinely cancels in mono even though the whole-file reads safe. Threshold
   // -0.25 (not just <0) so a momentary -0.07 window — normal stereo movement — is NOT
   // flagged; only a real polarity/anti-phase section (well negative) raises it.
-  const sectionCancels = phaseMin < -0.25 && phase >= 0;
+  const sectionCancels = phaseMin < PHASE_SECTION_CANCEL && phase >= 0;
 
-  if (headroom > -1) issues.push({
+  if (headroom > TP_CEILING_DBTP - 1) issues.push({   // anything over -1 dBTP is worth a note
     type: 'headroom',
-    // hot-but-safe (-1..0) vs genuinely clipping (>0): title/summary match the real state.
-    title: headroom > 0 ? 'True peak is over the ceiling' : 'True peak is a touch hot',
-    severity: headroom > 0 ? 'high' : 'low',
-    summary: headroom > 0
-      ? `True peak measures ${r.truePeakEstimate} dBTP, above 0 - lossy encoding can push it into clipping.`
+    // Tiers shared with score.ts (TP_CLIP_DBTP): >+1 genuinely clips (HIGH, caps the verdict);
+    // 0..+1 is over the ceiling but shippable (LOW); -1..0 is hot-but-safe (LOW). The severity
+    // and the verdict agree on whether it clips — that's the no-bluff invariant.
+    title: headroom > TP_CLIP_DBTP ? 'True peak is over the ceiling'
+      : headroom > TP_CEILING_DBTP ? 'True peak is over 0 dBTP' : 'True peak is a touch hot',
+    severity: headroom > TP_CLIP_DBTP ? 'high' : 'low',
+    summary: headroom > TP_CLIP_DBTP
+      ? `True peak measures ${r.truePeakEstimate} dBTP, over +${TP_CLIP_DBTP} - lossy encoding will clip it.`
+      : headroom > TP_CEILING_DBTP
+      ? `True peak measures ${r.truePeakEstimate} dBTP, just over 0 - can clip on lossy encode; drop the ceiling to -1.`
       : `True peak measures ${r.truePeakEstimate} dBTP - a touch over the -1 dBTP streaming ceiling, not clipping.`,
     beginner: 'Lower the master or limiter ceiling until true peak sits at or below -1 dBTP.',
     expert: 'Back off the final limiter and compare kick / snare crest before adding any extra loudness push.',
@@ -92,7 +97,7 @@ export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): D
 
   const safeForDemo = issues.every(i => i.severity !== 'high');
   const tonal = low > high + 5 ? 'Bottom-heavy tilt' : high > low + 5 ? 'Air-heavy tilt' : 'Balanced broad tilt';
-  const headroomState = headroom > 0 ? 'Over the ceiling' : headroom > -1 ? 'A touch hot' : headroom > -1.5 ? 'Tight' : 'Comfortable';
+  const headroomState = headroom > TP_CLIP_DBTP ? 'Clipping' : headroom > TP_CEILING_DBTP ? 'Over the ceiling' : headroom > -1 ? 'A touch hot' : headroom > -1.5 ? 'Tight' : 'Comfortable';
   const monoState = phase < 0 ? 'Unsafe in mono' : (phase < 0.2 || sectionCancels) ? 'Monitor in mono' : 'Stable enough';
   return {
     issues, verdict: '', safeForDemo, tonal, headroomState, monoState,
