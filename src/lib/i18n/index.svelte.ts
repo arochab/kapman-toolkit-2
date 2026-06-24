@@ -164,6 +164,16 @@ const fr: Dict = {
   'genre.uk-garage': 'UK Garage',
   'genre.ambient': 'Ambient',
   'genre.other': 'Pas sûr',
+  // Toasts (user-facing, so localized — the verdict screen isn't the only screenshot moment)
+  'toast.favSignin': 'Connecte-toi pour garder tes favoris — ils se synchronisent à ton compte.',
+  'toast.favError': 'Impossible de mettre à jour les favoris. Vérifie ta connexion et réessaie.',
+  'toast.noteSaved': 'Note enregistrée.',
+  'toast.noteError': 'La note n’a pas pu être enregistrée. Vérifie ta connexion.',
+  'toast.recipeAdded': 'Recette ajoutée au projet.',
+  'toast.recipeAddError': 'Impossible d’ajouter au projet. Réessaie.',
+  'toast.projectsError': 'Impossible de rafraîchir les projets. Vérifie ta connexion.',
+  'toast.projectRecipesError': 'Impossible de rafraîchir les recettes du projet.',
+  'toast.signoutError': 'Échec de la déconnexion. Tu as été déconnecté localement.',
 };
 
 // --- ENGLISH
@@ -289,6 +299,15 @@ const en: Dict = {
   'genre.uk-garage': 'UK Garage',
   'genre.ambient': 'Ambient',
   'genre.other': 'Not sure',
+  'toast.favSignin': 'Sign in to save favorites — they sync to your account.',
+  'toast.favError': 'Could not update favorites. Check your connection and try again.',
+  'toast.noteSaved': 'Note saved.',
+  'toast.noteError': 'Note could not be saved. Check your connection.',
+  'toast.recipeAdded': 'Recipe added to project.',
+  'toast.recipeAddError': 'Could not add to project. Try again.',
+  'toast.projectsError': 'Could not refresh projects. Check your connection.',
+  'toast.projectRecipesError': 'Could not refresh project recipes.',
+  'toast.signoutError': 'Sign out failed. You have been logged out locally.',
 };
 
 const DICTS: Record<Locale, Dict> = { fr, en };

@@ -4,6 +4,7 @@
   import type { Route, Project, UserRecipeNote } from './lib/types/index.js';
   import { getFavorites, toggleFavorite, getNotes, saveNote, getProjects, getProjectRecipes, addRecipeToProject, isAdmin } from './lib/utils/db.js';
   import { toast } from './lib/utils/toast.svelte.js';
+  import { t } from './lib/i18n/index.svelte.js';
   import Nav from './lib/components/Nav.svelte';
   import Toast from './lib/components/Toast.svelte';
   import Home from './lib/components/Home.svelte';
@@ -77,7 +78,7 @@
   async function handleToggleFav(recipeId: string) {
     if (!user) {
       // Explain the auth gate instead of silently teleporting home (which read as a crash).
-      toast('Sign in to save favorites - they sync to your account.', 'error', 5000);
+      toast(t('toast.favSignin'), 'error', 5000);
       return;
     }
     const isFav = favorites.includes(recipeId);
@@ -86,7 +87,7 @@
       favorites = isFav ? favorites.filter((id) => id !== recipeId) : [...favorites, recipeId];
     } catch (error) {
       console.error('Favorite toggle failed:', error);
-      toast('Could not update favorites. Check your connection and try again.');
+      toast(t('toast.favError'));
     }
   }
 
@@ -95,10 +96,10 @@
     try {
       await saveNote(user.id, recipeId, content);
       notes = await getNotes(user.id);
-      toast('Note saved.', 'success', 3000);
+      toast(t('toast.noteSaved'), 'success', 3000);
     } catch (error) {
       console.error('Note save failed:', error);
-      toast('Note could not be saved. Check your connection.');
+      toast(t('toast.noteError'));
     }
   }
 
@@ -110,10 +111,10 @@
         ...projectRecipeMap,
         [projectId]: existing.includes(recipeId) ? existing : [...existing, recipeId]
       };
-      toast('Recipe added to project.', 'success', 3000);
+      toast(t('toast.recipeAdded'), 'success', 3000);
     } catch (error) {
       console.error('Add to project failed:', error);
-      toast('Could not add to project. Try again.');
+      toast(t('toast.recipeAddError'));
     }
   }
 
@@ -129,7 +130,7 @@
       projectRecipeMap = Object.fromEntries(entries);
     } catch (error) {
       console.error('Projects refresh failed:', error);
-      toast('Could not refresh projects. Check your connection.');
+      toast(t('toast.projectsError'));
     }
   }
 
@@ -138,7 +139,7 @@
       projectRecipeMap = { ...projectRecipeMap, [projectId]: await getProjectRecipes(projectId) };
     } catch (error) {
       console.error('Project recipe refresh failed:', error);
-      toast('Could not refresh project recipes.');
+      toast(t('toast.projectRecipesError'));
     }
   }
 
@@ -147,7 +148,7 @@
       await supabase.auth.signOut();
     } catch (error) {
       console.error('Sign out failed:', error);
-      toast('Sign out failed. You have been logged out locally.');
+      toast(t('toast.signoutError'));
     } finally {
       clearUserData();
       navigate('home');
