@@ -11,15 +11,20 @@ import { i18n } from '../i18n/index.svelte.js';
 
 type Bi = { fr: string; en: string };
 
-// The one-line "what's wrong" sentence, in producer voice, per issue.
+// The one-line "what's wrong" sentence, in producer voice, per issue. Some issues are
+// STATE-AWARE (headroom, phase): the same issue type means different things depending on
+// the real measurement, so the copy branches on it — a SHIP master that's only a hair hot
+// must never read "it will clip", and a wide-but-positive master must never read "parts
+// cancel". This is the no-bluff invariant: the sentence can't contradict the receipt.
 const SUMMARY: Record<IssueType, Bi> = {
+  // headroom: hot-but-safe variant (default); the over-ceiling clip variant is below.
   headroom: {
-    fr: 'Ton true peak dépasse le plafond — au moindre encodage, ça va clipper. Baisse le ceiling à -1 dBTP.',
-    en: 'Your true peak is over the ceiling — it will clip once encoded. Drop the ceiling to -1 dBTP.',
+    fr: 'Dernier point avant d’envoyer : ton true peak est un peu chaud, ramène le ceiling à -1 dBTP.',
+    en: 'One last thing before you ship: your true peak is a touch hot — set the ceiling to -1 dBTP.',
   },
   phase: {
-    fr: 'En mono, des éléments s’annulent — vérifie la polarité et les reverbs avant tout le reste.',
-    en: 'In mono, parts cancel out — check polarity and reverbs before anything else.',
+    fr: 'Image large — vérifie que le bas et les parties clés tiennent en mono avant d’élargir plus.',
+    en: 'Wide image — confirm the low end and key parts survive a mono fold before widening more.',
   },
   'top-end': {
     fr: 'Le haut du spectre est dur — un shelf doux sur les aigus, pas un boost sur tout le mix.',
@@ -39,8 +44,40 @@ const SUMMARY: Record<IssueType, Bi> = {
   },
 };
 
-export function issueSummary(issue: IssueType): string {
-  return SUMMARY[issue][i18n.locale];
+// State-aware overrides keyed on the real measurement.
+const HEADROOM_CLIP: Bi = {
+  fr: 'Ton true peak dépasse le plafond — au moindre encodage, ça va clipper. Baisse le ceiling à -1 dBTP.',
+  en: 'Your true peak is over the ceiling — it will clip once encoded. Drop the ceiling to -1 dBTP.',
+};
+const PHASE_CANCEL: Bi = {
+  fr: 'En mono, des éléments s’annulent — vérifie la polarité et les reverbs avant tout le reste.',
+  en: 'In mono, parts cancel out — check polarity and reverbs before anything else.',
+};
+const PHASE_SECTION: Bi = {
+  fr: 'Une section s’annule en mono — repère le passage le plus large et corrige sa polarité.',
+  en: 'A section cancels in mono — find the widest passage and fix its polarity.',
+};
+
+// The one-line summary. Pass the analysis + the verdict so headroom/phase branch on the
+// REAL state — the sentence can never contradict the verdict or the honesty receipt.
+// `verdict` is the score.ts tier ('ship' | 'almost' | 'work'); when the mix already SHIPs,
+// a hot true peak is a last-call note, not a "it will clip" condemnation.
+export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: string): string {
+  const loc = i18n.locale;
+  if (a) {
+    if (issue === 'headroom') {
+      // Hard-clip wording only when the peak is bad enough to NOT ship (>2 dBTP is the
+      // hard-fault line in score.ts) — anything the verdict still ships is a gentle note.
+      const condemns = verdict === 'work' || a.truePeakEstimate > 2;
+      return (condemns ? HEADROOM_CLIP : SUMMARY.headroom)[loc];
+    }
+    if (issue === 'phase') {
+      if (a.phaseCorrelation < 0) return PHASE_CANCEL[loc];
+      if (a.phaseCorrelationMin < -0.25) return PHASE_SECTION[loc];
+      return SUMMARY.phase[loc];   // wide-but-positive
+    }
+  }
+  return SUMMARY[issue][loc];
 }
 
 // FR/EN for the three human readings (mirror score.ts, localized).

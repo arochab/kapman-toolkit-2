@@ -1,0 +1,104 @@
+// Issue detection — the layer that turns DSP metrics into the cards the user sees.
+// Pure (depends only on AudioAnalysis + GenreId), so it is unit-tested in diagnostics.test.ts.
+// Genre-aware on purpose: score.ts judges the low/high gaps and loudness PER GENRE, so this
+// detector uses the SAME genre target zones (genreById) — a verdict and its fix card can
+// never contradict each other (the no-bluff invariant).
+
+import type { AudioAnalysis } from '../utils/audio.js';
+import { getRecommendations } from '../utils/audio.js';
+import type { IssueType } from './issueTypes.js';
+import type { Recipe } from '../types/index.js';
+import { genreById, type GenreId } from './genres.js';
+import { suggestionsForIssues } from './needRoutes.js';
+
+export type Issue = {
+  type: IssueType; title: string; severity: 'high' | 'medium' | 'low';
+  summary: string; beginner: string; expert: string; ignore: string;
+};
+export type Diagnostics = {
+  issues: Issue[]; verdict: string; safeForDemo: boolean;
+  tonal: string; headroomState: string; monoState: string;
+  actionQueue: Issue[]; recs: string[]; suggestions: Recipe[];
+};
+
+export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): Diagnostics {
+  const g = genreById(genreId);
+  const issues: Issue[] = [];
+  const headroom = r.truePeakEstimate, loudness = r.lufsEstimate, phase = r.phaseCorrelation;
+  const phaseMin = r.phaseCorrelationMin;   // worst 400ms window — catches a section that collapses
+  const low = r.lowEnergy, mid = r.midEnergy, high = r.highEnergy;
+  const lowGap = low - mid, highGap = high - mid;
+  // A section genuinely cancels in mono even though the whole-file reads safe. Threshold
+  // -0.25 (not just <0) so a momentary -0.07 window — normal stereo movement — is NOT
+  // flagged; only a real polarity/anti-phase section (well negative) raises it.
+  const sectionCancels = phaseMin < -0.25 && phase >= 0;
+
+  if (headroom > -1) issues.push({
+    type: 'headroom',
+    // hot-but-safe (-1..0) vs genuinely clipping (>0): title/summary match the real state.
+    title: headroom > 0 ? 'True peak is over the ceiling' : 'True peak is a touch hot',
+    severity: headroom > 0 ? 'high' : 'low',
+    summary: headroom > 0
+      ? `True peak measures ${r.truePeakEstimate} dBTP, above 0 - lossy encoding can push it into clipping.`
+      : `True peak measures ${r.truePeakEstimate} dBTP - a touch over the -1 dBTP streaming ceiling, not clipping.`,
+    beginner: 'Lower the master or limiter ceiling until true peak sits at or below -1 dBTP.',
+    expert: 'Back off the final limiter and compare kick / snare crest before adding any extra loudness push.',
+    ignore: 'Do not chase more loudness until this is under control.'
+  });
+  if (phase < 0.2 || sectionCancels) issues.push({
+    type: 'phase',
+    title: phase < 0 ? 'Mono cancellation detected' : sectionCancels ? 'A section cancels in mono' : 'Very wide, check mono',
+    severity: (phase < 0 || sectionCancels) ? 'high' : 'low',
+    summary: phase < 0 ? `Correlation is ${r.phaseCorrelation} - below 0 means layers cancel when folded to mono.`
+      : sectionCancels ? `Overall correlation is ${r.phaseCorrelation}, but a section drops to ${r.phaseCorrelationMin} - part of the track cancels in mono.`
+      : `Correlation is ${r.phaseCorrelation} - a wide image is fine, just confirm the low end survives a mono fold.`,
+    beginner: 'Check the low end and wide verbs in mono before doing anything else.',
+    expert: (phase < 0 || sectionCancels) ? 'Find the inverted/polarity-flipped layer (check the worst section); a mono-maker only masks it. Then narrow below 150-200 Hz.'
+      : 'Spot-check decorrelated reverbs and chorus returns, and keep below 150-200 Hz mono.',
+    ignore: 'Do not add more width until the center feels stable.'
+  });
+  if (highGap > g.highGap[1] + 2) issues.push({
+    type: 'top-end', title: 'Top-end reads bright', severity: 'medium',
+    summary: `Highs sit about ${Math.round(highGap)} dB over the mids - bright for ${g.label}, can feel brittle on long listens.`,
+    beginner: 'Try a subtle shelf on hats or air elements instead of boosting the whole mix.',
+    expert: 'Review cymbal transient shape and upper-mid congestion before adding pure air.',
+    ignore: 'Do not fix this with a broad smile EQ on the master.'
+  });
+  if (lowGap > g.lowGap[1] + 2) issues.push({
+    type: 'low-end', title: 'Low end dominates the mids', severity: 'medium',
+    summary: `Low band sits about ${Math.round(lowGap)} dB over the mids - heavy even for ${g.label}; kick and bass will read oversized on full-range systems.`,
+    beginner: 'A/B on small speakers and lower either kick sub or bass sub by 1-2 dB.',
+    expert: 'Separate ownership between 45-65 Hz and 80-110 Hz instead of compressing everything harder.',
+    ignore: 'Do not widen the low end to make it feel "bigger".'
+  });
+  if (loudness < g.lufs[0] - 2) issues.push({
+    type: 'loudness', title: 'Reads quiet next to references', severity: 'low',
+    summary: `At ${r.lufsEstimate} LUFS this is quiet for ${g.label} - fine if the mix is unfinished.`,
+    beginner: 'Leave it for now if the mix is unfinished. Revisit loudness last.',
+    expert: 'Only push once the tonal and headroom problems are solved.',
+    ignore: 'Do not chase a LUFS number before the track is balanced.'
+  });
+  if (!issues.length) issues.push({
+    type: 'healthy', title: 'No red flag dominates yet', severity: 'low',
+    summary: 'The snapshot looks broadly healthy. Remaining work is likely about taste and reference matching.',
+    beginner: 'Compare with one trusted reference and adjust only the biggest mismatch you hear.',
+    expert: 'Use the spectrum and crest relationship to fine-tune intent, not to over-correct.',
+    ignore: 'Do not invent problems just because a meter exists.'
+  });
+
+  // "The one thing" is severity-ranked, not declaration-order: a catastrophic gap must
+  // headline over a hair-hot true peak. high > medium > low, stable within a tier.
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  issues.sort((a, b) => rank[a.severity] - rank[b.severity]);
+
+  const safeForDemo = issues.every(i => i.severity !== 'high');
+  const tonal = low > high + 5 ? 'Bottom-heavy tilt' : high > low + 5 ? 'Air-heavy tilt' : 'Balanced broad tilt';
+  const headroomState = headroom > 0 ? 'Over the ceiling' : headroom > -1 ? 'A touch hot' : headroom > -1.5 ? 'Tight' : 'Comfortable';
+  const monoState = phase < 0 ? 'Unsafe in mono' : (phase < 0.2 || sectionCancels) ? 'Monitor in mono' : 'Stable enough';
+  return {
+    issues, verdict: '', safeForDemo, tonal, headroomState, monoState,
+    actionQueue: issues.slice(0, 3),
+    recs: getRecommendations(r),
+    suggestions: suggestionsForIssues(issues.map(i => i.type)),
+  };
+}

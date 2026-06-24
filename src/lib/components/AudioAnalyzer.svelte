@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { analyzeAudio, getRecommendations, ANALYSIS_STAGES, type AnalysisStage } from '../utils/audio.js';
+  import { analyzeAudio, ANALYSIS_STAGES, type AnalysisStage } from '../utils/audio.js';
+  import { computeDiagnostics } from '../reco/diagnostics.js';
   import type { AudioAnalysis } from '../utils/audio.js';
   import type { Recipe, Project, RecipeNeed } from '../types/index.js';
   import { issueSummary, honestyReceipt } from '../reco/issueText.js';
@@ -14,7 +15,7 @@
   import { scoreMix, type MixScore } from '../reco/score.js';
   // Deterministic need→route bridge (replaces brittle tag-overlap scoring). Cue can
   // only ever hand over a route the DSP supports — see needRoutes.ts.
-  import { suggestionsForIssues, characterRoutes, bestRouteForNeed, DIAGNOSTIC_NEEDS } from '../reco/needRoutes.js';
+  import { characterRoutes, bestRouteForNeed, DIAGNOSTIC_NEEDS } from '../reco/needRoutes.js';
   import { i18n, t } from '../i18n/index.svelte.js';
 
   let {
@@ -306,96 +307,8 @@
     }
   }
 
-  // ---- Diagnostics (issue detection) - unchanged source of truth, drives "the fix" ----
-  type Issue = {
-    type: IssueType; title: string; severity: 'high' | 'medium' | 'low';
-    summary: string; beginner: string; expert: string; ignore: string;
-  };
-  type Diagnostics = {
-    issues: Issue[]; verdict: string; safeForDemo: boolean;
-    tonal: string; headroomState: string; monoState: string;
-    actionQueue: Issue[]; recs: string[]; suggestions: Recipe[];
-  };
-
-  // Recipe suggestions now route off the explicit `recipe.need` field via needRoutes,
-  // not tag overlap — the matching is structural, so Cue cannot bluff a route.
-  function suggestRecipes(issues: Issue[]): Recipe[] {
-    return suggestionsForIssues(issues.map(i => i.type));
-  }
-
-  // Genre-aware so a fix card can never contradict the verdict: score.ts judges the
-  // low/high gaps and loudness PER GENRE, so the issue detector must use the same
-  // genre target zones (genreById) instead of fixed literals. Otherwise a SHIP master
-  // (e.g. a balanced -4.5 dB/oct techno track, lowGap ~21 inside techno [10,38])
-  // would still print a "fix the bass" card.
-  function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): Diagnostics {
-    const g = genreById(genreId);
-    const issues: Issue[] = [];
-    const headroom = r.truePeakEstimate, loudness = r.lufsEstimate, phase = r.phaseCorrelation;
-    const phaseMin = r.phaseCorrelationMin;   // worst 400ms window — catches a section that collapses
-    const low = r.lowEnergy, mid = r.midEnergy, high = r.highEnergy;
-    const lowGap = low - mid, highGap = high - mid;
-    // A section genuinely cancels in mono even though the whole-file reads safe. Threshold
-    // -0.25 (not just <0) so a momentary -0.07 window — normal stereo movement — is NOT
-    // flagged; only a real polarity/anti-phase section (well negative) raises it.
-    const sectionCancels = phaseMin < -0.25 && phase >= 0;
-
-    if (headroom > -1) issues.push({
-      type: 'headroom', title: 'True peak is over the ceiling', severity: 'high',
-      summary: `True peak measures ${r.truePeakEstimate} dBTP, above the -1 dBTP ceiling - lossy encoding can push it into clipping.`,
-      beginner: 'Lower the master or limiter ceiling until true peak sits at or below -1 dBTP.',
-      expert: 'Back off the final limiter and compare kick / snare crest before adding any extra loudness push.',
-      ignore: 'Do not chase more loudness until this is under control.'
-    });
-    if (phase < 0.2 || sectionCancels) issues.push({
-      type: 'phase',
-      title: phase < 0 ? 'Mono cancellation detected' : sectionCancels ? 'A section cancels in mono' : 'Very wide, check mono',
-      severity: (phase < 0 || sectionCancels) ? 'high' : 'low',
-      summary: phase < 0 ? `Correlation is ${r.phaseCorrelation} - below 0 means layers cancel when folded to mono.`
-        : sectionCancels ? `Overall correlation is ${r.phaseCorrelation}, but a section drops to ${r.phaseCorrelationMin} - part of the track cancels in mono.`
-        : `Correlation is ${r.phaseCorrelation} - a wide image is fine, just confirm the low end survives a mono fold.`,
-      beginner: 'Check the low end and wide verbs in mono before doing anything else.',
-      expert: (phase < 0 || sectionCancels) ? 'Find the inverted/polarity-flipped layer (check the worst section); a mono-maker only masks it. Then narrow below 150-200 Hz.'
-        : 'Spot-check decorrelated reverbs and chorus returns, and keep below 150-200 Hz mono.',
-      ignore: 'Do not add more width until the center feels stable.'
-    });
-    if (highGap > g.highGap[1] + 2) issues.push({
-      type: 'top-end', title: 'Top-end reads bright', severity: 'medium',
-      summary: `Highs sit about ${Math.round(highGap)} dB over the mids - bright for ${g.label}, can feel brittle on long listens.`,
-      beginner: 'Try a subtle shelf on hats or air elements instead of boosting the whole mix.',
-      expert: 'Review cymbal transient shape and upper-mid congestion before adding pure air.',
-      ignore: 'Do not fix this with a broad smile EQ on the master.'
-    });
-    if (lowGap > g.lowGap[1] + 2) issues.push({
-      type: 'low-end', title: 'Low end dominates the mids', severity: 'medium',
-      summary: `Low band sits about ${Math.round(lowGap)} dB over the mids - heavy even for ${g.label}; kick and bass will read oversized on full-range systems.`,
-      beginner: 'A/B on small speakers and lower either kick sub or bass sub by 1-2 dB.',
-      expert: 'Separate ownership between 45-65 Hz and 80-110 Hz instead of compressing everything harder.',
-      ignore: 'Do not widen the low end to make it feel "bigger".'
-    });
-    if (loudness < g.lufs[0] - 2) issues.push({
-      type: 'loudness', title: 'Reads quiet next to references', severity: 'low',
-      summary: `At ${r.lufsEstimate} LUFS this is quiet for ${g.label} - fine if the mix is unfinished.`,
-      beginner: 'Leave it for now if the mix is unfinished. Revisit loudness last.',
-      expert: 'Only push once the tonal and headroom problems are solved.',
-      ignore: 'Do not chase a LUFS number before the track is balanced.'
-    });
-    if (!issues.length) issues.push({
-      type: 'healthy', title: 'No red flag dominates yet', severity: 'low',
-      summary: 'The snapshot looks broadly healthy. Remaining work is likely about taste and reference matching.',
-      beginner: 'Compare with one trusted reference and adjust only the biggest mismatch you hear.',
-      expert: 'Use the spectrum and crest relationship to fine-tune intent, not to over-correct.',
-      ignore: 'Do not invent problems just because a meter exists.'
-    });
-
-    const safeForDemo = issues.every(i => i.severity !== 'high');
-    const tonal = low > high + 5 ? 'Bottom-heavy tilt' : high > low + 5 ? 'Air-heavy tilt' : 'Balanced broad tilt';
-    const headroomState = headroom > -1 ? 'Over the ceiling' : headroom > -1.5 ? 'Tight' : 'Comfortable';
-    const monoState = phase < 0 ? 'Unsafe in mono' : phase < 0.2 ? 'Monitor in mono' : 'Stable enough';
-    return { issues, verdict: '', safeForDemo, tonal, headroomState, monoState,
-      actionQueue: issues.slice(0, 3), recs: getRecommendations(r), suggestions: suggestRecipes(issues) };
-  }
-
+  // Issue detection lives in a pure, unit-tested module (reco/diagnostics.ts) so the
+  // "verdict and fix card never contradict" property is machine-checked, not just asserted.
   // genre is reactive (the producer can correct it post-verdict) so diagnostics re-derive
   const diagnostics = $derived(result ? computeDiagnostics(result, genre) : null);
   const topFix = $derived(diagnostics?.actionQueue[0] ?? null);
@@ -417,9 +330,11 @@
 
   // The one fix sentence — now FULLY producer-FR (the screenshot moment can't be half-English).
   // issueSummary() returns the localized one-line "what's wrong + what to do" per issue.
+  // Pass the real analysis so headroom/phase copy branches on the measured state — the
+  // sentence under the verdict can never contradict the verdict or the honesty receipt.
   const oneThing = $derived.by(() => {
-    if (!topFix) return '';
-    return (i18n.locale, issueSummary(topFix.type as IssueType));
+    if (!topFix || !result) return '';
+    return (i18n.locale, issueSummary(topFix.type as IssueType, result, mix?.verdict));
   });
 
   // The honesty receipt: one line of what Cue actually heard, under the verdict.

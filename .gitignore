@@ -44,3 +44,4 @@ tasks/
 scripts/
 .claude/wf-*.js
 .tmp-dsp/
+CLAUDE.md
