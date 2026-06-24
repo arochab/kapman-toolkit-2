@@ -82,16 +82,20 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   // matching the low-severity card there. (See TP_CLIP_DBTP, shared with diagnostics/issueText.)
   const hardFault = a.phaseCorrelation < -0.1 || sectionCancels || a.truePeakEstimate > TP_CLIP_DBTP;
 
-  // A tonal DEFECT card (excess or deficit, either band) is a medium-severity fix that
-  // diagnostics.ts shows as THE one thing — so the verdict must not read SHIP over it.
-  // Same shared predicates as the card, so verdict and card can never point opposite ways.
+  // Any HIGH/MEDIUM diagnostics card must cap the verdict so the headline can never read SHIP
+  // over a real fix card — the no-bluff invariant. Tonal cards (excess/deficit, both bands)
+  // and a NEGATIVE-phase card (mono cancellation, which diagnostics shows HIGH at phase < 0,
+  // not only < -0.1) both qualify. sectionCancels is already a hard fault above. These use the
+  // SAME predicates/boundaries the cards use, so the two layers cannot drift.
   const tonalCard =
     topEndExcess(highGap, g.highGap) || topEndDeficit(highGap, g.highGap, a.spectralTiltDbPerOct) ||
     lowEndExcess(lowGap, g.lowGap)  || lowEndDeficit(lowGap, g.lowGap);
+  const phaseCard = a.phaseCorrelation < 0;   // HIGH "mono cancellation" card fires here
+  const cappingCard = tonalCard || phaseCard;
 
   let verdict: Verdict;
   if (hardFault || score < 55) verdict = 'work';
-  else if (score < 80 || tonalCard) verdict = 'almost';   // a tonal card caps SHIP -> ALMOST
+  else if (score < 80 || cappingCard) verdict = 'almost';   // any medium/high card caps SHIP -> ALMOST
   else verdict = 'ship';
 
   // CLAMP the numeric score into its verdict's band. The score is persisted and re-rendered

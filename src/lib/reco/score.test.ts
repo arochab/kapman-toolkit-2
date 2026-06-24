@@ -40,9 +40,14 @@ describe('verdict — real defects still fail (no false pass)', () => {
   it('real mono cancellation (phase -1) is an instant NOT YET', () => {
     expect(scoreMix(mk({ phaseCorrelation: -1, phaseCorrelationMin: -1 }), 'techno').verdict).toBe('work');
   });
-  it('a hair-negative phase (-0.05) does NOT auto-condemn a wide master', () => {
+  it('a hair-negative phase (-0.05) reads ALMOST — not condemned to NOT YET, but never SHIP', () => {
+    // diagnostics shows a HIGH "mono cancellation" card at phase < 0, so the verdict must NOT
+    // ship over it; -0.05 is too small to hard-fault, so the honest landing is ALMOST.
     const m = scoreMix(mk({ phaseCorrelation: -0.05, phaseCorrelationMin: -0.05, truePeakEstimate: -1, lufsEstimate: -7 }), 'techno');
-    expect(m.verdict).not.toBe('work');
+    expect(m.verdict).toBe('almost');
+    const top = computeDiagnostics(mk({ phaseCorrelation: -0.05, phaseCorrelationMin: -0.05 }), 'techno').actionQueue[0];
+    expect(top.type).toBe('phase');
+    expect(top.severity).toBe('high');   // card and verdict now agree: a real fault, not SHIP
   });
 });
 
@@ -77,23 +82,28 @@ describe('no-bluff cross-layer — section-cancel never reads SHIP', () => {
   });
 });
 
-// BRUTE-FORCE the no-bluff invariant across every genre and the near-floor tonal band that
-// bluffed before — a SHIP verdict must NEVER coexist with a medium/high diagnostics card.
-describe('no-bluff invariant — swept across all genres (no SHIP over any tonal card)', () => {
+// BRUTE-FORCE the no-bluff invariant — a SHIP verdict must NEVER coexist with a medium/high
+// diagnostics card. The sweep varies EVERY axis a card keys off (lowGap, highGap, tilt, phase,
+// section-cancel, true peak) so the safety net has no hole — this is the guarantor test.
+describe('no-bluff invariant — swept across all genres + every card axis', () => {
+  const PHASES = [0.95, 0.5, 0.1, 0, -0.05, -0.1, -0.4];          // incl. the [-0.1,0) bluff band
+  const PMINS = [0.9, -0.07, -0.3, -0.8];                          // incl. section-cancel band
+  const TILTS = [-2, -4, -7];                                      // incl. the dull (<-6) range
+  const TPS = [-1.5, 0.5, 1.5];                                    // safe / over-0 / clipping
   for (const g of GENRES.map((x) => x.id) as GenreId[]) {
-    it(`${g}: no SHIP ever coexists with a medium/high fix card (lowGap & highGap swept floor±6)`, () => {
+    it(`${g}: no SHIP ever coexists with a medium/high fix card (all axes swept)`, () => {
       const gt = GENRES.find((x) => x.id === g)!;
-      for (let lowGap = gt.lowGap[0] - 6; lowGap <= gt.lowGap[1] + 6; lowGap += 1) {
-        for (let highGap = gt.highGap[0] - 6; highGap <= gt.highGap[1] + 6; highGap += 2) {
-          const mid = -50;
-          const a = mk({ lufsEstimate: (gt.lufs[0] + gt.lufs[1]) / 2, truePeakEstimate: -1, phaseCorrelation: 0.9, phaseCorrelationMin: 0.9,
-            midEnergy: mid, lowEnergy: mid + lowGap, highEnergy: mid + highGap, spectralTiltDbPerOct: -4 });
-          const v = scoreMix(a, g).verdict;
-          if (v === 'ship') {
-            const top = computeDiagnostics(a, g).actionQueue[0];
-            const sev = top ? top.severity : 'low';
-            expect(sev, `SHIP with a ${sev} ${top?.type} card @ lowGap=${lowGap} highGap=${highGap}`).toBe('low');
-          }
+      const mid = -50;
+      for (let lowGap = gt.lowGap[0] - 6; lowGap <= gt.lowGap[1] + 6; lowGap += 3)
+      for (let highGap = gt.highGap[0] - 6; highGap <= gt.highGap[1] + 6; highGap += 4)
+      for (const phase of PHASES) for (const pmin of PMINS) for (const tilt of TILTS) for (const tp of TPS) {
+        const a = mk({ lufsEstimate: (gt.lufs[0] + gt.lufs[1]) / 2, truePeakEstimate: tp,
+          phaseCorrelation: phase, phaseCorrelationMin: Math.min(phase, pmin),
+          midEnergy: mid, lowEnergy: mid + lowGap, highEnergy: mid + highGap, spectralTiltDbPerOct: tilt });
+        if (scoreMix(a, g).verdict === 'ship') {
+          const top = computeDiagnostics(a, g).actionQueue[0];
+          const sev = top ? top.severity : 'low';
+          expect(sev, `SHIP over a ${sev} ${top?.type} card @ low=${lowGap} high=${highGap} ph=${phase} pmin=${pmin} tilt=${tilt} tp=${tp}`).toBe('low');
         }
       }
     });
