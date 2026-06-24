@@ -371,8 +371,13 @@ function computeSpectrum(ch0: Float32Array, ch1: Float32Array, len: number, fs: 
     const fMax = fCenter * Math.sqrt(ratio);
     const kMin = Math.max(1, Math.floor(fMin / binHz));
     const kMax = Math.min(power.length - 1, Math.ceil(fMax / binHz));
-    let bandPower = 0;
-    for (let k = kMin; k <= kMax; k++) bandPower += power[k];
+    // Power DENSITY per band = mean power per FFT bin, NOT the raw sum. A 1/3-octave
+    // band high up spans far more Hz (more bins) than a low one, so summing made the
+    // top read artificially loud — biasing tilt by ~+2.6 dB/oct and inflating low/high
+    // gaps. Dividing by the bin count makes every band physically comparable.
+    let bandSum = 0, bandBins = 0;
+    for (let k = kMin; k <= kMax; k++) { bandSum += power[k]; bandBins++; }
+    const bandPower = bandSum / Math.max(1, bandBins);
     const db = 10 * Math.log10(bandPower || 1e-12);
     spectrum.push(round1(db));
     spectrumFreqs.push(Math.round(fCenter));
