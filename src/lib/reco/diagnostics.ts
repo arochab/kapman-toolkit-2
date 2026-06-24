@@ -5,7 +5,8 @@
 // never contradict each other (the no-bluff invariant).
 
 import type { AudioAnalysis } from '../utils/audio.js';
-import { type IssueType, TP_CEILING_DBTP, TP_CLIP_DBTP, PHASE_SECTION_CANCEL } from './issueTypes.js';
+import { type IssueType, TP_CEILING_DBTP, TP_CLIP_DBTP, PHASE_SECTION_CANCEL,
+  topEndExcess, topEndDeficit, lowEndExcess, lowEndDeficit } from './issueTypes.js';
 import type { Recipe } from '../types/index.js';
 import { genreById, type GenreId } from './genres.js';
 import { suggestionsForIssues } from './needRoutes.js';
@@ -64,14 +65,14 @@ export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): D
   // The spectral tilt corroborates the deficit so a genre with a low highGap floor (e.g. dub
   // techno) isn't flagged dull just for being dark by design — only a master that is BOTH
   // below its genre's high floor AND globally dark (tilt steeper than ~-6 dB/oct) is "lacks air".
-  if (highGap > g.highGap[1] + 2) issues.push({
+  if (topEndExcess(highGap, g.highGap)) issues.push({
     type: 'top-end', title: 'Top-end reads bright', severity: 'medium',
     summary: `Highs sit about ${Math.round(highGap)} dB over the mids - bright for ${g.label}, can feel brittle on long listens.`,
     beginner: 'Try a subtle shelf on hats or air elements instead of boosting the whole mix.',
     expert: 'Review cymbal transient shape and upper-mid congestion before adding pure air.',
     ignore: 'Do not fix this with a broad smile EQ on the master.'
   });
-  else if (highGap < g.highGap[0] - 2 && r.spectralTiltDbPerOct < -6) issues.push({
+  else if (topEndDeficit(highGap, g.highGap, r.spectralTiltDbPerOct)) issues.push({
     type: 'top-end', title: 'Top-end is dull', severity: 'medium',
     summary: `Highs sit about ${Math.round(highGap)} dB under the mids - dark for ${g.label} (tilt ${r.spectralTiltDbPerOct} dB/oct); it can read lifeless next to references.`,
     beginner: 'Add a gentle air shelf (10-14 kHz) on the elements that should sparkle, not the whole mix.',
@@ -79,16 +80,16 @@ export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): D
     ignore: 'Do not crank a broad high boost — find what is missing and lift only that.'
   });
   // LOW END — both sides too: a thin master (no weight) is as real a fault as a boomy one.
-  if (lowGap > g.lowGap[1] + 2) issues.push({
+  if (lowEndExcess(lowGap, g.lowGap)) issues.push({
     type: 'low-end', title: 'Low end dominates the mids', severity: 'medium',
     summary: `Low band sits about ${Math.round(lowGap)} dB over the mids - heavy even for ${g.label}; kick and bass will read oversized on full-range systems.`,
     beginner: 'A/B on small speakers and lower either kick sub or bass sub by 1-2 dB.',
     expert: 'Separate ownership between 45-65 Hz and 80-110 Hz instead of compressing everything harder.',
     ignore: 'Do not widen the low end to make it feel "bigger".'
   });
-  else if (lowGap < g.lowGap[0] - 2) issues.push({
+  else if (lowEndDeficit(lowGap, g.lowGap)) issues.push({
     type: 'low-end', title: 'Low end is thin', severity: 'medium',
-    summary: `Low band sits about ${Math.round(lowGap)} dB over the mids - light for ${g.label}; the track can feel weightless on a club system.`,
+    summary: `Low band sits about ${Math.round(lowGap)} dB vs the mids - light for ${g.label}; the track can feel weightless on a club system.`,
     beginner: 'Give the kick and bass more body around 50-90 Hz before touching anything else.',
     expert: 'Check the HPF on the master/bus and whether sub got carved too hard; rebuild weight at the source, not with a broad shelf.',
     ignore: 'Do not just turn the whole low end up — find the missing octave and fill it.'

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { scoreMix } from './score.js';
+import { scoreMix, verdictForScore, SCORE_ALMOST_MIN } from './score.js';
 import { computeDiagnostics } from './diagnostics.js';
+import { GENRES, type GenreId } from './genres.js';
 import type { AudioAnalysis } from '../utils/audio.js';
 
 // A minimal AudioAnalysis with only the fields scoreMix reads; the rest are filler.
@@ -73,5 +74,55 @@ describe('no-bluff cross-layer — section-cancel never reads SHIP', () => {
   it('a genuinely wide-but-safe master (phase 0.4, phaseMin 0.3) still ships', () => {
     const a = mk({ truePeakEstimate: -1.5, lufsEstimate: -8, phaseCorrelation: 0.4, phaseCorrelationMin: 0.3, lowEnergy: -30, midEnergy: -52, highEnergy: -67 });
     expect(scoreMix(a, 'techno').verdict).toBe('ship');     // a wide image alone does NOT condemn
+  });
+});
+
+// BRUTE-FORCE the no-bluff invariant across every genre and the near-floor tonal band that
+// bluffed before — a SHIP verdict must NEVER coexist with a medium/high diagnostics card.
+describe('no-bluff invariant — swept across all genres (no SHIP over any tonal card)', () => {
+  for (const g of GENRES.map((x) => x.id) as GenreId[]) {
+    it(`${g}: no SHIP ever coexists with a medium/high fix card (lowGap & highGap swept floor±6)`, () => {
+      const gt = GENRES.find((x) => x.id === g)!;
+      for (let lowGap = gt.lowGap[0] - 6; lowGap <= gt.lowGap[1] + 6; lowGap += 1) {
+        for (let highGap = gt.highGap[0] - 6; highGap <= gt.highGap[1] + 6; highGap += 2) {
+          const mid = -50;
+          const a = mk({ lufsEstimate: (gt.lufs[0] + gt.lufs[1]) / 2, truePeakEstimate: -1, phaseCorrelation: 0.9, phaseCorrelationMin: 0.9,
+            midEnergy: mid, lowEnergy: mid + lowGap, highEnergy: mid + highGap, spectralTiltDbPerOct: -4 });
+          const v = scoreMix(a, g).verdict;
+          if (v === 'ship') {
+            const top = computeDiagnostics(a, g).actionQueue[0];
+            const sev = top ? top.severity : 'low';
+            expect(sev, `SHIP with a ${sev} ${top?.type} card @ lowGap=${lowGap} highGap=${highGap}`).toBe('low');
+          }
+        }
+      }
+    });
+  }
+});
+
+describe('score is clamped into its verdict band (saved history can never disagree)', () => {
+  const hardFaults: Array<[string, Partial<AudioAnalysis>]> = [
+    ['phase -0.2', { phaseCorrelation: -0.2, phaseCorrelationMin: -0.2 }],
+    ['phase -1',   { phaseCorrelation: -1, phaseCorrelationMin: -1 }],
+    ['+3 dBTP',    { truePeakEstimate: 3 }],
+    ['section cancel', { phaseCorrelation: 0.4, phaseCorrelationMin: -0.8 }],
+  ];
+  it.each(hardFaults)('hard fault %s: verdict=work AND score < %i AND verdictForScore agrees', (_label, patch) => {
+    const m = scoreMix(mk(patch), 'techno');
+    expect(m.verdict).toBe('work');
+    expect(m.score).toBeLessThan(SCORE_ALMOST_MIN);          // not a green number under NOT YET
+    expect(verdictForScore(m.score)).toBe('work');           // history re-derivation agrees
+  });
+  it('for ANY verdict, the persisted score re-derives to the SAME verdict', () => {
+    const cases: Partial<AudioAnalysis>[] = [
+      { truePeakEstimate: -1.5, lufsEstimate: -8, lowEnergy: -30, midEnergy: -52, highEnergy: -67 }, // ship
+      { truePeakEstimate: 0.5 },                                                                      // almost (over 0)
+      { phaseCorrelation: -1, phaseCorrelationMin: -1 },                                              // work
+      { lowEnergy: -52, midEnergy: -50, highEnergy: -64 },                                            // almost (thin)
+    ];
+    for (const c of cases) {
+      const m = scoreMix(mk(c), 'techno');
+      expect(verdictForScore(m.score), `score ${m.score} vs verdict ${m.verdict}`).toBe(m.verdict);
+    }
   });
 });

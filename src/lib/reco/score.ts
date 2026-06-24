@@ -7,10 +7,20 @@
 
 import type { AudioAnalysis } from '../utils/audio.js';
 import { genreById, type GenreId, type GenreTarget } from './genres.js';
-import { TP_CLIP_DBTP, PHASE_SECTION_CANCEL } from './issueTypes.js';
+import { TP_CLIP_DBTP, PHASE_SECTION_CANCEL,
+  topEndExcess, topEndDeficit, lowEndExcess, lowEndDeficit } from './issueTypes.js';
 
 export type Verdict = 'ship' | 'almost' | 'work';
 export type FaceMood = 'happy' | 'thinking' | 'worried';
+
+// The score->verdict band thresholds — the SINGLE source of truth. scoreMix clamps the
+// returned score into these bands, and Projects history derives its label from the SAME
+// function, so the analyzer and the saved timeline can never show different verdicts.
+export const SCORE_SHIP_MIN = 80;
+export const SCORE_ALMOST_MIN = 55;
+export function verdictForScore(score: number): Verdict {
+  return score >= SCORE_SHIP_MIN ? 'ship' : score >= SCORE_ALMOST_MIN ? 'almost' : 'work';
+}
 
 export interface MixScore {
   score: number;            // 0..100
@@ -61,7 +71,7 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   const sectionCancels = a.phaseCorrelationMin < PHASE_SECTION_CANCEL && a.phaseCorrelation >= 0;
   if (sectionCancels) off += clamp((-a.phaseCorrelationMin) * 30, 0, 22);
 
-  const score = Math.round(clamp(100 - off, 1, 100));
+  let score = Math.round(clamp(100 - off, 1, 100));
 
   // --- verdict bands ---
   // A hard fault is an INSTANT worst-tier ("NOT YET"), bypassing the score: real mono
@@ -71,10 +81,26 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   // of 0..+1 is hot-but-shippable: a low-severity note, points lost, but not condemned —
   // matching the low-severity card there. (See TP_CLIP_DBTP, shared with diagnostics/issueText.)
   const hardFault = a.phaseCorrelation < -0.1 || sectionCancels || a.truePeakEstimate > TP_CLIP_DBTP;
+
+  // A tonal DEFECT card (excess or deficit, either band) is a medium-severity fix that
+  // diagnostics.ts shows as THE one thing — so the verdict must not read SHIP over it.
+  // Same shared predicates as the card, so verdict and card can never point opposite ways.
+  const tonalCard =
+    topEndExcess(highGap, g.highGap) || topEndDeficit(highGap, g.highGap, a.spectralTiltDbPerOct) ||
+    lowEndExcess(lowGap, g.lowGap)  || lowEndDeficit(lowGap, g.lowGap);
+
   let verdict: Verdict;
   if (hardFault || score < 55) verdict = 'work';
-  else if (score < 80) verdict = 'almost';
+  else if (score < 80 || tonalCard) verdict = 'almost';   // a tonal card caps SHIP -> ALMOST
   else verdict = 'ship';
+
+  // CLAMP the numeric score into its verdict's band. The score is persisted and re-rendered
+  // elsewhere (Projects history via verdictWordForScore), so a raw score that disagrees with
+  // its own verdict (e.g. a hard-faulted track scoring 92) would show SHIP in saved history
+  // while the analyzer says NOT YET. Clamping makes the number and the word inseparable.
+  if (verdict === 'work') score = Math.min(score, SCORE_ALMOST_MIN - 1);
+  else if (verdict === 'almost') score = clamp(score, SCORE_ALMOST_MIN, SCORE_SHIP_MIN - 1);
+  else score = Math.max(score, SCORE_SHIP_MIN);
 
   const verdictWord = verdict === 'ship' ? 'SHIP IT' : verdict === 'almost' ? 'ALMOST' : 'NEEDS WORK';
   const face: FaceMood = verdict === 'ship' ? 'happy' : verdict === 'almost' ? 'thinking' : 'worried';

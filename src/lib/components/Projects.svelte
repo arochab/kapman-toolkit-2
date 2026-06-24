@@ -3,6 +3,7 @@
   import { createProject } from '../utils/db.js';
   import { toast } from '../utils/toast.svelte.js';
   import { getHistory, type AnalysisRecord } from '../progress/history.js';
+  import { verdictForScore } from '../reco/score.js';
   import { i18n, t } from '../i18n/index.svelte.js';
   import Auth from './Auth.svelte';
 
@@ -22,9 +23,12 @@
   const VERDICT_WORD: Record<string, string> = {
     ship: 'ENVOIE', almost: 'PRESQUE', work: 'PAS ENCORE'
   };
+  // Derive the saved-history label from the SAME verdictForScore() the analyzer uses, so the
+  // timeline can never disagree with what the verdict screen showed. (scoreMix now clamps the
+  // persisted score into its verdict band, so this re-derivation is exact, not approximate.)
   function verdictFor(score: number | undefined): string {
     if (score == null) return '';
-    return score >= 80 ? VERDICT_WORD.ship : score >= 55 ? VERDICT_WORD.almost : VERDICT_WORD.work;
+    return VERDICT_WORD[verdictForScore(score)];
   }
 
   let showCreate = $state(false);
