@@ -38,6 +38,10 @@ reports/
 # rendered social videos (heavy binaries, kept local — the generator HTML IS committed)
 assets/story/*.mp4
 
+# Supabase CLI local link state (machine-specific, no secrets but not for the repo)
+supabase/.temp/
+supabase/.branches/
+
 # Internal scaffolding — kept local, never published
 PROJECT-STATUS.md
 COMMS.md
