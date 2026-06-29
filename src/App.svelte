@@ -15,6 +15,7 @@
   import Projects from './lib/components/Projects.svelte';
   import ProjectDetail from './lib/components/ProjectDetail.svelte';
   import Admin from './lib/components/Admin.svelte';
+  import Legal from './lib/components/Legal.svelte';
 
   let route = $state<Route>('home');
   let routeParam = $state<string | null>(null);
@@ -273,11 +274,19 @@
         {:else}
           <section class="page-container" style="padding-top:2rem;"><p class="scene-copy">Not authorized.</p></section>
         {/if}
+      {:else if route === 'legal'}
+        <section class="page-container" style="padding-top:2rem;"><Legal /></section>
       {/if}
     </main>
 
-    <footer class="page-container" style="padding: 28px 0 20px; position:relative; z-index:2; color: var(--color-text-muted); font: 400 11px/1 var(--font-mono); letter-spacing: .12em;">
-      <span>cuepoint</span>
+    <!-- Permanent legal footer (LCEN art. 6 / L616-1 require the links to be visible). -->
+    <footer class="legal-footer">
+      <button class="foot-link" onclick={() => navigate('legal')}>{t('foot.cgv')}</button>
+      <button class="foot-link" onclick={() => navigate('legal')}>{t('foot.refund')}</button>
+      <button class="foot-link" onclick={() => navigate('legal')}>{t('foot.legal')}</button>
+      <button class="foot-link" onclick={() => navigate('legal')}>{t('foot.privacy')}</button>
+      <a class="foot-link" href="mailto:adam.chabbi94@gmail.com">{t('foot.contact')}</a>
+      <span class="foot-mark">cuepoint</span>
     </footer>
   {/if}
 </div>

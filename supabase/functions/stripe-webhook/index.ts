@@ -36,6 +36,8 @@ Deno.serve(async (req) => {
   const session = event.data.object as Stripe.Checkout.Session;
   const userId = session.metadata?.user_id;
   const credits = Number(session.metadata?.credits ?? "0");
+  const consentAt = session.metadata?.consent_at ?? null;   // durable proof of the L221-28 waiver
+  const cgvVersion = session.metadata?.cgv_version ?? null;
   if (!userId || credits <= 0) return new Response("no metadata", { status: 200 });
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -50,6 +52,8 @@ Deno.serve(async (req) => {
     p_user: userId,
     p_credits: credits,
     p_event_id: event.id,
+    p_consent_at: consentAt,
+    p_cgv_version: cgvVersion,
   });
   if (rpcErr) {
     console.error("fulfill_stripe_credits failed", rpcErr.message);

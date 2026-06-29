@@ -89,7 +89,7 @@ export interface ProjectComment {
 
 // 'recipes' (the standalone library) was deleted by the UX jury — recipe-detail survives,
 // reached from a verdict (Path A) or a cold need-question (Path B), never a library tab.
-export type Route = 'home' | 'recipe-detail' | 'analyzer' | 'projects' | 'project-detail' | 'admin';
+export type Route = 'home' | 'recipe-detail' | 'analyzer' | 'projects' | 'project-detail' | 'admin' | 'legal';
 
 // Admin dashboard shapes (read via service-aware RPC / RLS-gated selects).
 export interface AdminUserRow {

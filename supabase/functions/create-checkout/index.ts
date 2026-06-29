@@ -36,10 +36,17 @@ Deno.serve(async (req) => {
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return json(401, { error: "bad-token" }, origin);
 
-  let body: { pack?: string };
+  let body: { pack?: string; consent?: boolean; cgvVersion?: string };
   try { body = await req.json(); } catch { return json(400, { error: "bad-json" }, origin); }
   const pack = PACKS[body.pack ?? "single"];
   if (!pack) return json(400, { error: "bad-pack" }, origin);
+
+  // L221-28 13deg: the buyer must expressly request immediate delivery AND acknowledge losing
+  // the 14-day withdrawal right. No consent -> no checkout. We stamp the consent + CGV version
+  // into the session metadata so the webhook can persist durable proof on the entitlement.
+  if (body.consent !== true) return json(400, { error: "consent-required" }, origin);
+  const consentAt = new Date().toISOString();
+  const cgvVersion = String(body.cgvVersion ?? "v1");
 
   try {
     const session = await stripe.checkout.sessions.create(
@@ -53,8 +60,13 @@ Deno.serve(async (req) => {
             product_data: { name: `CuePoint - ${pack.label}` },
           },
         }],
-        // The webhook reads these to grant credits to the right user.
-        metadata: { user_id: user.id, credits: String(pack.credits) },
+        // The webhook reads these to grant credits to the right user + persist consent proof.
+        metadata: {
+          user_id: user.id,
+          credits: String(pack.credits),
+          consent_at: consentAt,
+          cgv_version: cgvVersion,
+        },
         success_url: `${APP_URL}/?paid=1`,
         cancel_url: `${APP_URL}/?canceled=1`,
       },

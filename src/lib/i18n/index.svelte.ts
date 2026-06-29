@@ -191,6 +191,13 @@ const fr: Dict = {
   'coach.signin': 'Connecte-toi pour utiliser ta lecture offerte.',
   'pay.received': 'Paiement reçu. Tes crédits arrivent dans un instant.',
   'pay.canceled': 'Paiement annulé. Rien ne t’a été débité.',
+  'pay.recap': 'Tu achètes des crédits pour le coach IA. 1 crédit = 1 lecture. Vendeur : CuePoint (Adam Chabbi). Prix TTC, sans abonnement, crédits sans expiration.',
+  'pay.waiver': 'Je demande la fourniture immédiate de mes crédits et je reconnais perdre mon droit de rétractation dès qu’un crédit est utilisé (art. L221-28, 13° du Code de la consommation).',
+  'pay.order': 'Commander avec obligation de paiement',
+  'pay.terms': 'Voir les conditions et le remboursement',
+  // footer
+  'foot.cgv': 'CGV', 'foot.refund': 'Remboursement', 'foot.legal': 'Mentions légales',
+  'foot.privacy': 'Confidentialité', 'foot.contact': 'Contact',
 };
 
 // --- ENGLISH
@@ -340,6 +347,12 @@ const en: Dict = {
   'coach.signin': 'Sign in to use your free read.',
   'pay.received': 'Payment received. Your credits land in a moment.',
   'pay.canceled': 'Payment canceled. You were not charged.',
+  'pay.recap': 'You are buying credits for the AI coach. 1 credit = 1 read. Seller: CuePoint (Adam Chabbi). Prices incl. tax, no subscription, credits never expire.',
+  'pay.waiver': 'I request immediate delivery of my credits and acknowledge I lose my right of withdrawal once a credit is used (art. L221-28, 13° French Consumer Code).',
+  'pay.order': 'Order with obligation to pay',
+  'pay.terms': 'See the terms and refund policy',
+  'foot.cgv': 'Terms', 'foot.refund': 'Refunds', 'foot.legal': 'Legal notice',
+  'foot.privacy': 'Privacy', 'foot.contact': 'Contact',
 };
 
 const DICTS: Record<Locale, Dict> = { fr, en };

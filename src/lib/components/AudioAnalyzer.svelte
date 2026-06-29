@@ -27,7 +27,7 @@
     onConsumedFile
   }: {
     onOpenRecipe?: (id: string) => void;
-    onNavigate?: (route: 'projects') => void;
+    onNavigate?: (route: 'projects' | 'legal') => void;
     user?: { id: string; email?: string } | null;
     projects?: Project[];
     pendingFile?: File | null;
@@ -134,6 +134,8 @@
   let credits = $state(0);
   let showPacks = $state(false);
   let buying = $state(false);
+  // L221-28 withdrawal-right waiver: must be ticked before any pack can be ordered.
+  let waiver = $state(false);
 
   function coachInputFrom() {
     if (!result || !diagnostics || !mix) return null;
@@ -187,6 +189,8 @@
     // No account = no checkout (we must know who to credit). Instead of a dead click,
     // send the producer to the sign-in screen (it lives on the Projects page).
     if (!user) { onNavigate?.('projects'); return; }
+    // L221-28: no checkout without the express withdrawal-right waiver (also enforced server-side).
+    if (!waiver) return;
     buying = true;
     try {
       const url = await startCheckout(pack);
@@ -524,13 +528,22 @@
               <button class="link tide" style="margin:14px 0;" onclick={() => onNavigate?.('projects')}>{t('coach.signin')} →</button>
             {/if}
             <div class="pack-list">
-              <button class="pack" disabled={buying} onclick={() => buyPack('single')}>{t('coach.pack1')}</button>
-              <button class="pack pack-default" disabled={buying} onclick={() => buyPack('five')}>{t('coach.pack5')}</button>
-              <button class="pack" disabled={buying} onclick={() => buyPack('twelve')}>{t('coach.pack12')}</button>
+              <button class="pack" disabled={buying || !waiver} onclick={() => buyPack('single')}>{t('coach.pack1')}</button>
+              <button class="pack pack-default" disabled={buying || !waiver} onclick={() => buyPack('five')}>{t('coach.pack5')}</button>
+              <button class="pack" disabled={buying || !waiver} onclick={() => buyPack('twelve')}>{t('coach.pack12')}</button>
             </div>
-            <p class="ash xsmall coach-fine">{t('coach.honesty')}</p>
+            <!-- Pre-contractual recap + the L221-28 waiver consent. Packs stay disabled until ticked. -->
+            <p class="ash xsmall coach-fine">{t('pay.recap')}</p>
+            <label class="waiver">
+              <input type="checkbox" bind:checked={waiver} />
+              <span class="ash small">{t('pay.waiver')}</span>
+            </label>
+            <p class="ash xsmall coach-fine">{t('pay.order')} · {t('coach.honesty')}</p>
             <p class="ash xsmall coach-fine">{t('coach.safety')}</p>
-            <button class="link ash" onclick={() => showPacks = false}>{t('coach.back')}</button>
+            <div class="actions" style="margin-top:18px;">
+              <button class="link ash" onclick={() => onNavigate?.('legal')}>{t('pay.terms')} →</button>
+              <button class="link ash" onclick={() => showPacks = false}>{t('coach.back')}</button>
+            </div>
           </div>
         {/if}
       </div>
@@ -677,6 +690,8 @@
   .pack:disabled { opacity: .55; cursor: default; }
   .coach-fine { margin: 14px 0 0; line-height: 1.5; }
   .xsmall { font-size: 12px; }
+  .waiver { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 0; cursor: pointer; }
+  .waiver input { margin-top: 3px; flex-shrink: 0; accent-color: var(--color-cyan); }
 
   .question { font-family: var(--font-serif); font-weight: 300; font-size: clamp(24px, 5vw, 38px); line-height: 1.1; color: var(--color-text); margin: 0; }
   .contents { list-style: none; padding: 0; margin: var(--gap-verse) 0 0; display: flex; flex-direction: column; gap: 32px; }

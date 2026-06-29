@@ -42,6 +42,9 @@ assets/story/*.mp4
 supabase/.temp/
 supabase/.branches/
 
+# Legal drafts — kept LOCAL until placeholders (SIREN, address, médiateur) are filled
+legal/
+
 # Internal scaffolding — kept local, never published
 PROJECT-STATUS.md
 COMMS.md

@@ -201,3 +201,21 @@ textarea { resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
   .fade-up, .reveal, .spinner { animation: none; opacity: 1; transform: none; }
 }
+
+/* Permanent legal footer — quiet, one row, the mandatory consumer links always reachable. */
+.legal-footer {
+  position: relative; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 20px;
+  max-width: 920px; margin: 0 auto; padding: 40px 24px 28px;
+  border-top: 1px solid color-mix(in srgb, var(--color-text-muted) 22%, transparent);
+}
+.legal-footer .foot-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--color-text-muted); font-size: 12px; letter-spacing: .02em;
+  text-decoration: none; transition: color .2s var(--ease-calm);
+}
+.legal-footer .foot-link:hover { color: var(--color-text); }
+.legal-footer .foot-mark {
+  margin-left: auto; color: var(--color-text-muted); opacity: .5;
+  font: 400 11px/1 var(--font-mono); letter-spacing: .14em;
+}

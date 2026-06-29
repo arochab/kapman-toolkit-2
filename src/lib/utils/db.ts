@@ -236,8 +236,14 @@ export async function getCredits(): Promise<number> {
 // balance) and is no longer part of any flow.
 
 // Start a Stripe Checkout for a credit pack. Returns the URL to redirect to.
+// CGV version the checkout consent is recorded against. Bump when the CGV change materially.
+export const CGV_VERSION = 'v1';
+
 export async function startCheckout(pack: 'single' | 'five' | 'twelve'): Promise<string | null> {
-  const { data, error } = await supabase.functions.invoke('create-checkout', { body: { pack } });
+  // consent = the buyer ticked the L221-28 withdrawal-right waiver box (enforced in the UI too).
+  const { data, error } = await supabase.functions.invoke('create-checkout', {
+    body: { pack, consent: true, cgvVersion: CGV_VERSION },
+  });
   if (error) return null;
   return (data?.url as string) ?? null;
 }

@@ -229,6 +229,13 @@ create table if not exists public.entitlements (
 );
 alter table public.entitlements enable row level security;
 
+-- V7 — Durable proof of the withdrawal-right waiver (Code de la consommation L221-28 13deg).
+-- The consumer ticks a box at checkout requesting immediate delivery and acknowledging the
+-- loss of the 14-day withdrawal right. We must keep durable proof: the consent timestamp and
+-- the exact CGV version they accepted. Filled by the Stripe webhook from the Checkout metadata.
+alter table public.entitlements add column if not exists consent_waiver_at timestamptz;
+alter table public.entitlements add column if not exists cgv_version text;
+
 -- 14. LLM usage log — every coach call (cost control + abuse detection, service-role only).
 create table if not exists public.llm_usage (
   id uuid primary key default gen_random_uuid(),
@@ -256,15 +263,17 @@ $$;
 -- then grant in two steps). Returns true if THIS call performed the grant, false if the
 -- event was already processed (Stripe retry) — the webhook acks 200 either way, and on any
 -- exception it must return 500 so Stripe retries. Service-role only (revoked below).
-create or replace function public.fulfill_stripe_credits(p_user uuid, p_credits integer, p_event_id text)
+create or replace function public.fulfill_stripe_credits(
+  p_user uuid, p_credits integer, p_event_id text,
+  p_consent_at timestamptz default null, p_cgv_version text default null)
 returns boolean
 language plpgsql
 security definer
 set search_path = ''
 as $$
 begin
-  insert into public.entitlements (user_id, status, source, stripe_event_id)
-  values (p_user, 'paid', 'stripe', p_event_id);
+  insert into public.entitlements (user_id, status, source, stripe_event_id, consent_waiver_at, cgv_version)
+  values (p_user, 'paid', 'stripe', p_event_id, p_consent_at, p_cgv_version);
   -- only reached if the insert did NOT violate the unique(stripe_event_id) constraint
   update public.profiles set credits = credits + p_credits where id = p_user;
   return true;
@@ -573,7 +582,7 @@ grant execute on function public.admin_set_banned(uuid, boolean, text) to authen
 -- functions must ONLY be reachable by the Edge Functions, which use the service-role key
 -- (service_role bypasses these grants), never from the client.
 revoke execute on function public.grant_credits(uuid, integer) from public, anon, authenticated;
-revoke execute on function public.fulfill_stripe_credits(uuid, integer, text) from public, anon, authenticated;
+revoke execute on function public.fulfill_stripe_credits(uuid, integer, text, timestamptz, text) from public, anon, authenticated;
 revoke execute on function public.spend_credit(uuid)           from public, anon, authenticated;
 revoke execute on function public.record_spend(numeric)        from public, anon, authenticated;
 revoke execute on function public.consume_coach_run(uuid)      from public, anon, authenticated;
