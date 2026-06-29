@@ -165,6 +165,18 @@
       if (mounted) loading = false;
     }, 3500);
 
+    // Stripe Checkout returns to /?paid=1 (or /?canceled=1). Acknowledge it so the buyer
+    // gets a real confirmation instead of landing on a bare Home (the credits arrive via the
+    // webhook a beat later, so we just reassure; the balance refreshes on next read).
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.has('paid')) toast(t('pay.received'), 'success', 5000);
+      else if (sp.has('canceled')) toast(t('pay.canceled'), 'error', 4000);
+      if (sp.has('paid') || sp.has('canceled')) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch { /* non-fatal */ }
+
     const boot = async () => {
       const generation = ++loadGeneration;
       try {

@@ -251,6 +251,29 @@ as $$
   update public.profiles set credits = credits + p_credits where id = p_user;
 $$;
 
+-- ATOMIC Stripe fulfillment: claim the event id AND grant the credits in ONE transaction,
+-- so a crash can never leave money-taken-but-credits-missing (the webhook used to insert
+-- then grant in two steps). Returns true if THIS call performed the grant, false if the
+-- event was already processed (Stripe retry) — the webhook acks 200 either way, and on any
+-- exception it must return 500 so Stripe retries. Service-role only (revoked below).
+create or replace function public.fulfill_stripe_credits(p_user uuid, p_credits integer, p_event_id text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.entitlements (user_id, status, source, stripe_event_id)
+  values (p_user, 'paid', 'stripe', p_event_id);
+  -- only reached if the insert did NOT violate the unique(stripe_event_id) constraint
+  update public.profiles set credits = credits + p_credits where id = p_user;
+  return true;
+exception
+  when unique_violation then
+    return false;   -- already fulfilled by a prior delivery; safe to ack
+end;
+$$;
+
 -- Atomic credit spend on a fresh analysis: returns true if a credit was available + consumed.
 create or replace function public.spend_credit(p_user uuid)
 returns boolean
@@ -538,7 +561,21 @@ grant select on public.app_limits        to authenticated;
 grant select on public.admin_audit_log   to authenticated;
 
 -- Let signed-in users call the RPCs (each re-checks auth/admin server-side).
-grant execute on function public.spend_credit(uuid)            to authenticated;
 grant execute on function public.is_admin()                    to authenticated;
 grant execute on function public.admin_grant_credits(uuid, integer) to authenticated;
 grant execute on function public.admin_set_banned(uuid, boolean, text) to authenticated;
+
+-- ============================================================
+-- V6 — LOCK DOWN money mutators. Postgres grants EXECUTE to PUBLIC by default, and
+-- Supabase exposes every public function as an anon/authenticated PostgREST RPC. Without
+-- these REVOKEs, any signed-in browser could call grant_credits/spend_credit/record_spend
+-- directly (self-grant unlimited credits, drain another user's credits, fake spend). These
+-- functions must ONLY be reachable by the Edge Functions, which use the service-role key
+-- (service_role bypasses these grants), never from the client.
+revoke execute on function public.grant_credits(uuid, integer) from public, anon, authenticated;
+revoke execute on function public.fulfill_stripe_credits(uuid, integer, text) from public, anon, authenticated;
+revoke execute on function public.spend_credit(uuid)           from public, anon, authenticated;
+revoke execute on function public.record_spend(numeric)        from public, anon, authenticated;
+revoke execute on function public.consume_coach_run(uuid)      from public, anon, authenticated;
+-- admin_grant_credits / admin_set_banned stay callable by authenticated BUT each re-checks
+-- public.is_admin() server-side (a non-admin call raises 'not authorized'), so they are safe.

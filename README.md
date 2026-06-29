@@ -42,7 +42,7 @@
 
 CuePoint runs a real signal-analysis pass on your track — **no upload, no server, no Web Audio shortcuts.** A hand-written radix-2 FFT, ITU-R BS.1770-4 gated LUFS, a 4×-oversampled true peak, phase correlation and a bandwidth-normalized 1/3-octave spectrum, all in an `OfflineAudioContext`. Then it does the hard part: it says the **one** thing to fix first, in the voice of a producer who's been there, and hands you the plugin chain.
 
-**The rule baked into all of it: Cue can't bluff.** Five measured problem types (plus a clean "healthy" state) map to five producer needs, and a fix is offered *only* when a measurement supports it — the routing is structural, not a vibe. Under every verdict sits an **honesty receipt** with the raw numbers Cue heard. Every claim in the table below is a clickable source file, and the DSP is **validated by a golden-value test suite** (`npm test`).
+**The rule baked into all of it: Cue can't bluff.** Five measured problem types route to four deterministic fix lanes (headroom and loudness share one), and a fix is offered *only* when a measurement supports it — the routing is structural, not a vibe. Under every verdict sits an **honesty receipt** with the raw numbers Cue heard. Every claim in the table below is a clickable source file, and the DSP is **validated by a golden-value test suite** (`npm test`).
 
 | Cue hears | The real measurement | Source |
 |---|---|---|
@@ -51,7 +51,7 @@ CuePoint runs a real signal-analysis pass on your track — **no upload, no serv
 | **Spectrum** | **Welch-averaged 1/3-octave** spectrum (Hann), **bandwidth-normalized**, on a hand-written **radix-2 FFT** | [`audio.ts`](src/lib/utils/audio.ts) |
 | **Balance** | **regression-fit** spectral tilt (white ≈ 0, pink ≈ −3 dB/oct, asserted in tests) | [`audio.ts`](src/lib/utils/audio.ts) |
 | **Phase** | whole-file **Pearson** correlation + a worst-400 ms-window scan (catches a section that collapses in mono) — the exact `computePhaseCorrelation()` the tests assert | [`audio.ts`](src/lib/utils/audio.ts) |
-| **No bluff** | 5 problem types (+ a healthy state) → 5 recipe needs; recipes route off an explicit `recipe.need` field, no overlap scoring | [`needRoutes.ts`](src/lib/reco/needRoutes.ts) |
+| **No bluff** | 5 problem types → 4 routable fix lanes (+ a browse-only character lane); recipes route off an explicit `recipe.need` field, no overlap scoring | [`needRoutes.ts`](src/lib/reco/needRoutes.ts) |
 
 <sub>* True peak uses 4× windowed-sinc oversampling — a practical approximation of BS.1770-4 Annex 2. It is sine-exact in tests and tuned not to false-clip hard-edged masters; it may read slightly under a spec-grade 8×/FIR meter on the very hottest material.</sub>
 

@@ -40,30 +40,20 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Idempotency: record the event id; if it already exists, do nothing. This row exists ONLY
-  // for the stripe_event_id unique constraint (replay protection). The real ledger is
-  // profiles.credits (1 credit = 1 AI coach read); we do NOT write any second counter here,
-  // so no number can ever contradict the credits the user actually bought.
-  const { error: dupeErr } = await admin
-    .from("entitlements")
-    .insert({
-      user_id: userId,
-      status: "paid",
-      source: "stripe",
-      stripe_event_id: event.id,
-    });
-  // Unique violation on stripe_event_id => already processed; safe to ack.
-  if (dupeErr && !String(dupeErr.message).includes("duplicate")) {
-    return new Response("db error", { status: 500 });
-  }
-
-  // Grant credits on the profile (idempotent guard: only if this event is the new one).
-  if (!dupeErr) {
-    await admin.rpc("grant_credits", { p_user: userId, p_credits: credits }).catch(async () => {
-      // Fallback if RPC absent: best-effort increment.
-      const { data: prof } = await admin.from("profiles").select("credits").eq("id", userId).maybeSingle();
-      await admin.from("profiles").update({ credits: (prof?.credits ?? 0) + credits }).eq("id", userId);
-    });
+  // ATOMIC fulfillment: claim the event id AND grant the credits in ONE transaction
+  // (fulfill_stripe_credits). This removes the old two-step insert-then-grant race where a
+  // crash between the steps could take money but never credit. The function returns:
+  //   true  -> this delivery performed the grant
+  //   false -> the event was already processed (Stripe retry) -> safe to ack 200
+  // On ANY error we return 500 so Stripe retries instead of silently dropping the credit.
+  const { error: rpcErr } = await admin.rpc("fulfill_stripe_credits", {
+    p_user: userId,
+    p_credits: credits,
+    p_event_id: event.id,
+  });
+  if (rpcErr) {
+    console.error("fulfill_stripe_credits failed", rpcErr.message);
+    return new Response("fulfillment error", { status: 500 }); // Stripe will retry
   }
 
   return new Response("ok", { status: 200 });

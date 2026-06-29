@@ -189,6 +189,8 @@ const fr: Dict = {
   'coach.reading': 'Cue relit ton morceau…',
   'coach.credits': 'crédits',
   'coach.signin': 'Connecte-toi pour utiliser ta lecture offerte.',
+  'pay.received': 'Paiement reçu. Tes crédits arrivent dans un instant.',
+  'pay.canceled': 'Paiement annulé. Rien ne t’a été débité.',
 };
 
 // --- ENGLISH
@@ -336,6 +338,8 @@ const en: Dict = {
   'coach.reading': 'Cue is reading your track…',
   'coach.credits': 'credits',
   'coach.signin': 'Sign in to use your free read.',
+  'pay.received': 'Payment received. Your credits land in a moment.',
+  'pay.canceled': 'Payment canceled. You were not charged.',
 };
 
 const DICTS: Record<Locale, Dict> = { fr, en };
