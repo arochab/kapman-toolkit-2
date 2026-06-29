@@ -174,6 +174,21 @@ const fr: Dict = {
   'toast.projectsError': 'Impossible de rafraîchir les projets. Vérifie ta connexion.',
   'toast.projectRecipesError': 'Impossible de rafraîchir les recettes du projet.',
   'toast.signoutError': 'Échec de la déconnexion. Tu as été déconnecté localement.',
+  // Coach (paid AI read) — the quiet opt-in UNDER the free fix. Copy validated by the FR copy
+  // jury: elegant, dry-warm, zero cliche, zero fear, no hyphens (middot separators in packs).
+  'coach.link': 'Tu veux que Cue te le dise avec ses mots ?',
+  'coach.linkSub': 'Première lecture offerte.',
+  'coach.title': 'Cue te relit ton verdict',
+  'coach.subtitle': 'Deux ou trois phrases sur ton morceau, et le geste d’après. Une lecture coûte un crédit.',
+  'coach.pack1': '1 crédit · 1 € · pour voir',
+  'coach.pack5': '5 crédits · 4 € · 0,80 la lecture',
+  'coach.pack12': '12 crédits · 8 € · 0,67 la lecture, le meilleur prix',
+  'coach.honesty': 'Cue ne touche à aucun chiffre. Il dit la même chose, dans ta langue à toi.',
+  'coach.safety': 'Pas de crédit ce soir ? Le verdict et la recette restent là, gratuits.',
+  'coach.back': 'Revenir au verdict',
+  'coach.reading': 'Cue relit ton morceau…',
+  'coach.credits': 'crédits',
+  'coach.signin': 'Connecte-toi pour utiliser ta lecture offerte.',
 };
 
 // --- ENGLISH
@@ -308,6 +323,19 @@ const en: Dict = {
   'toast.projectsError': 'Could not refresh projects. Check your connection.',
   'toast.projectRecipesError': 'Could not refresh project recipes.',
   'toast.signoutError': 'Sign out failed. You have been logged out locally.',
+  'coach.link': 'Want Cue to say it in its own words?',
+  'coach.linkSub': 'First read is on us.',
+  'coach.title': 'Cue reads your verdict back',
+  'coach.subtitle': 'Two or three sentences on your track, and the next move. One read costs a credit.',
+  'coach.pack1': '1 credit · 1 € · to try',
+  'coach.pack5': '5 credits · 4 € · 0.80 a read',
+  'coach.pack12': '12 credits · 8 € · 0.67 a read, best price',
+  'coach.honesty': 'Cue changes no number. It says the same thing, in words that land.',
+  'coach.safety': 'Out of credits tonight? The verdict and the recipe stay, free.',
+  'coach.back': 'Back to the verdict',
+  'coach.reading': 'Cue is reading your track…',
+  'coach.credits': 'credits',
+  'coach.signin': 'Sign in to use your free read.',
 };
 
 const DICTS: Record<Locale, Dict> = { fr, en };

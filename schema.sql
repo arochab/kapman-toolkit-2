@@ -463,8 +463,10 @@ as $$
 declare
   v_is_admin boolean := public.is_admin_email(new.email);
 begin
+  -- Normal users start with 1 free credit (the "première lecture offerte" — one AI coach
+  -- read on the house so a newcomer tastes Cue before paying). Admins are -1 = unlimited.
   insert into public.profiles (id, email, display_name, is_admin, credits, plan)
-  values (new.id, new.email, null, v_is_admin, case when v_is_admin then -1 else 0 end, case when v_is_admin then 'admin' else 'free' end)
+  values (new.id, new.email, null, v_is_admin, case when v_is_admin then -1 else 1 end, case when v_is_admin then 'admin' else 'free' end)
   on conflict (id) do update set is_admin = excluded.is_admin
     where public.is_admin_email(public.profiles.email);
   return new;

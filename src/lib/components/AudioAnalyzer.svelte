@@ -43,6 +43,13 @@
     }
   });
 
+  // Load the signed-in user's coach credit balance so the paywall can show it and gate the
+  // free first read. Signed-out users have no balance (the panel invites them to sign in).
+  $effect(() => {
+    if (user) { getCredits().then((c) => { credits = c; }).catch(() => {}); }
+    else credits = 0;
+  });
+
   // Genre is asked ONCE, up front (chip row). Pre-selected from last time as a kindness.
   let genre = $state<GenreId | null>(lastGenre());
 
@@ -492,6 +499,39 @@
       {/if}
 
       <p class="closing reveal">{t('fix.closing')}</p>
+
+      <!-- THE PAID COACH OPT-IN. Lives ONLY here, under the free fix's closing line — never at
+           the verdict, never a popup (jury rule: money never appears mid-sentence). The free
+           verdict + recipe above stand alone; this is a quiet, optional second read. -->
+      <div class="coach-offer reveal">
+        {#if coachText && coachUsedAI}
+          <p class="coach-read">{(i18n.locale, coachText)}</p>
+        {:else if coachBusy && coachUsedAI}
+          <p class="ash small">{t('coach.reading')}</p>
+        {:else if !showPacks}
+          <button class="link tide coach-cta" onclick={() => askCoach(true)}>{t('coach.link')}</button>
+          <span class="ash small coach-sub">{t('coach.linkSub')}</span>
+        {/if}
+
+        {#if showPacks}
+          <div class="packs reveal">
+            <p class="coach-title">{t('coach.title')}</p>
+            <p class="ash small coach-subtitle">{t('coach.subtitle')}</p>
+            {#if !user}
+              <p class="ash small" style="margin:14px 0;">{t('coach.signin')}</p>
+            {/if}
+            <div class="pack-list">
+              <button class="pack" disabled={buying} onclick={() => buyPack('single')}>{t('coach.pack1')}</button>
+              <button class="pack pack-default" disabled={buying} onclick={() => buyPack('five')}>{t('coach.pack5')}</button>
+              <button class="pack" disabled={buying} onclick={() => buyPack('twelve')}>{t('coach.pack12')}</button>
+            </div>
+            <p class="ash xsmall coach-fine">{t('coach.honesty')}</p>
+            <p class="ash xsmall coach-fine">{t('coach.safety')}</p>
+            <button class="link ash" onclick={() => showPacks = false}>{t('coach.back')}</button>
+          </div>
+        {/if}
+      </div>
+
       <div class="actions">
         <button class="link ash" onclick={() => showCharacter = true}>{t('fix.characterLane')} →</button>
         <button class="link ash" onclick={() => showFix = false}>{t('cold.back')}</button>
@@ -617,6 +657,23 @@
   .alts summary { list-style: none; }
   .alt-route { display: flex; flex-direction: column; gap: 4px; text-align: left; background: none; border: none; cursor: pointer; padding: 12px 0; }
   .closing { font-family: var(--font-serif); font-weight: 300; font-style: italic; color: var(--color-text-muted); margin: 40px 0 0; }
+
+  /* The paid coach opt-in — quiet, under the free fix. One Tide link, then a calm packs list. */
+  .coach-offer { margin-top: 36px; padding-top: 28px; border-top: 1px dashed color-mix(in srgb, var(--color-text-muted) 35%, transparent); }
+  .coach-cta { font-size: 15px; }
+  .coach-sub { display: block; margin-top: 7px; }
+  .coach-read { font-family: var(--font-serif); font-weight: 300; font-size: clamp(17px, 2.6vw, 21px); line-height: 1.4; color: var(--color-text); margin: 0; }
+  .coach-title { font-family: var(--font-serif); font-weight: 300; font-size: clamp(18px, 3vw, 23px); color: var(--color-text); margin: 0; }
+  .coach-subtitle { margin: 8px 0 20px; line-height: 1.55; }
+  .pack-list { display: flex; flex-direction: column; gap: 10px; }
+  .pack { display: block; width: 100%; text-align: left; background: none; cursor: pointer; padding: 15px 16px;
+    border: 1px solid color-mix(in srgb, var(--color-text-muted) 30%, transparent); border-radius: 10px;
+    color: var(--color-text); font-family: var(--font-mono); font-size: 13px; transition: border-color .2s var(--ease-calm); }
+  .pack:hover { border-color: var(--color-cyan); }
+  .pack-default { border: 2px solid var(--color-cyan); }
+  .pack:disabled { opacity: .55; cursor: default; }
+  .coach-fine { margin: 14px 0 0; line-height: 1.5; }
+  .xsmall { font-size: 12px; }
 
   .question { font-family: var(--font-serif); font-weight: 300; font-size: clamp(24px, 5vw, 38px); line-height: 1.1; color: var(--color-text); margin: 0; }
   .contents { list-style: none; padding: 0; margin: var(--gap-verse) 0 0; display: flex; flex-direction: column; gap: 32px; }

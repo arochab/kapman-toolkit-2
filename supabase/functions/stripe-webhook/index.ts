@@ -40,7 +40,10 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Idempotency: record the event id; if it already exists, do nothing.
+  // Idempotency: record the event id; if it already exists, do nothing. This row exists ONLY
+  // for the stripe_event_id unique constraint (replay protection). The real ledger is
+  // profiles.credits (1 credit = 1 AI coach read); we do NOT write any second counter here,
+  // so no number can ever contradict the credits the user actually bought.
   const { error: dupeErr } = await admin
     .from("entitlements")
     .insert({
@@ -48,7 +51,6 @@ Deno.serve(async (req) => {
       status: "paid",
       source: "stripe",
       stripe_event_id: event.id,
-      coach_runs_limit: credits * 20, // each track-credit = a bounded coaching budget
     });
   // Unique violation on stripe_event_id => already processed; safe to ack.
   if (dupeErr && !String(dupeErr.message).includes("duplicate")) {
