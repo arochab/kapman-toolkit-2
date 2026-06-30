@@ -1,3 +1,5 @@
+import { parseWav, isWavBuffer, WavParseError } from './wavParser.js';
+
 export interface AudioAnalysis {
   durationSec: number;
   sampleRate: number;
@@ -122,13 +124,19 @@ const yieldToPaint = () => new Promise<void>((r) => setTimeout(r, 0));
 // decodeAudioData on a very large or unusual WAV (e.g. 32-bit float, or a 200 MB mixbus)
 // can reject silently or never resolve. We guard with a size limit + a hard timeout and
 // throw a TYPED, human error the UI can show instead of freezing. Tune the cap as needed.
-export const MAX_AUDIO_BYTES = 80 * 1024 * 1024;   // 80 MB — a normal export; mixbus WAVs exceed it
+// Generous cap (raw bytes). A real 24-bit / 32-bit-float stereo mixbus is large; we no longer
+// reject those — we PARSE them ourselves (see wavParser). This only stops a pathological file.
+export const MAX_AUDIO_BYTES = 600 * 1024 * 1024;   // 600 MB
 export class AudioDecodeError extends Error {
   constructor(public code: 'too-large' | 'decode-failed' | 'timeout', message: string) {
     super(message); this.name = 'AudioDecodeError';
   }
 }
 
+// analyzeAudio routes by CONTENT: WAV files are parsed by hand at their NATIVE sample rate
+// (no decodeAudioData, no resample, 32-bit-float supported) — this is what unblocks real
+// mixbus files. Everything else (MP3/OGG/FLAC) falls back to decodeAudioData. Both paths
+// feed the identical, fs-parameterized DSP via runDsp(), so results are correct at any rate.
 export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) => void): Promise<AudioAnalysis> {
   // STAGE 1 — decode (also covers sample peak + RMS, the cheap first pass).
   onStage?.('decode');
@@ -136,30 +144,69 @@ export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) 
 
   if (file.size > MAX_AUDIO_BYTES) {
     throw new AudioDecodeError('too-large',
-      `Fichier trop lourd (${Math.round(file.size / 1048576)} Mo). Exporte un fichier sous ${Math.round(MAX_AUDIO_BYTES / 1048576)} Mo (un WAV 16/24-bit plus court, ou un MP3 320).`);
+      `Fichier trop lourd (${Math.round(file.size / 1048576)} Mo). La limite est ${Math.round(MAX_AUDIO_BYTES / 1048576)} Mo.`);
   }
 
-  const ctx = new OfflineAudioContext(2, 1, 44100);
   const arrayBuf = await file.arrayBuffer();
-  // Race the decode against a timeout so an unsupported/huge file can never hang the UI.
+
+  let ch0: Float32Array, ch1: Float32Array, len: number, fs: number, channels: number;
+
+  if (isWavBuffer(arrayBuf)) {
+    // WAV path: parse PCM/float at native rate, no codec, no resample, never hangs.
+    try {
+      const w = parseWav(arrayBuf);
+      channels = w.numberOfChannels;
+      ch0 = w.channelData[0];
+      ch1 = channels > 1 ? w.channelData[1] : ch0;
+      len = w.length;
+      fs = w.sampleRate;
+      await yieldToPaint();
+    } catch (e) {
+      // A weird/truncated WAV still gets a chance via the browser codec fallback below.
+      if (e instanceof WavParseError && e.code === 'unsupported-format') {
+        ({ ch0, ch1, len, fs, channels } = await decodeViaBrowser(arrayBuf));
+      } else if (e instanceof WavParseError) {
+        throw new AudioDecodeError('decode-failed', e.message);
+      } else { throw e; }
+    }
+  } else {
+    // Non-WAV (MP3/OGG/FLAC): the browser codec is the only way; keep the timeout guard.
+    ({ ch0, ch1, len, fs, channels } = await decodeViaBrowser(arrayBuf));
+  }
+
+  if (len === 0) throw new AudioDecodeError('decode-failed', 'Le fichier ne contient aucun échantillon audio.');
+
+  return runDsp(ch0, ch1, len, fs, channels, len / fs, onStage);
+}
+
+// Browser-codec fallback for non-WAV (and odd WAV). Resamples to 44100; wrapped in a timeout
+// so an unsupported/huge file can never hang the UI forever.
+async function decodeViaBrowser(arrayBuf: ArrayBuffer): Promise<{ ch0: Float32Array; ch1: Float32Array; len: number; fs: number; channels: number }> {
+  const ctx = new OfflineAudioContext(2, 1, 44100);
   let decoded: AudioBuffer;
   try {
     decoded = await Promise.race([
-      ctx.decodeAudioData(arrayBuf),
+      ctx.decodeAudioData(arrayBuf.slice(0)),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new AudioDecodeError('timeout', 'Le décodage a pris trop de temps. Essaie un export plus léger (WAV plus court ou MP3 320).')), 30000)),
+        setTimeout(() => reject(new AudioDecodeError('timeout', 'Le décodage a pris trop de temps. Essaie un autre export.')), 30000)),
     ]);
   } catch (e) {
     if (e instanceof AudioDecodeError) throw e;
     throw new AudioDecodeError('decode-failed',
-      'Ce fichier n’a pas pu être décodé. Le navigateur ne lit pas certains WAV (par ex. 32-bit float) : réexporte en WAV 16 ou 24-bit, ou en MP3 320.');
+      'Ce fichier n’a pas pu être décodé. Réexporte en WAV (16/24/32-bit ou float) ou en MP3 320.');
   }
+  const c0 = decoded.getChannelData(0);
+  const c1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : c0;
+  return { ch0: c0, ch1: c1, len: c0.length, fs: decoded.sampleRate, channels: decoded.numberOfChannels };
+}
 
-  const ch0 = decoded.getChannelData(0);
-  const ch1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : ch0;
-  const len = ch0.length;
-  const fs = decoded.sampleRate;
-
+// The full DSP, shared by both decode paths. fs is the file's NATIVE rate; every stage below
+// is already fs-parameterized (LUFS K-weighting, true-peak, phase windows, spectrum bins), so
+// 48k/96k material analyzes correctly without resampling.
+export async function runDsp(
+  ch0: Float32Array, ch1: Float32Array, len: number, fs: number,
+  channels: number, durationSec: number, onStage?: (stage: AnalysisStage) => void
+): Promise<AudioAnalysis> {
   // ---- Sample peak ----
   let peak = 0;
   for (let i = 0; i < len; i++) {
@@ -203,7 +250,7 @@ export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) 
   await yieldToPaint();
   // ---- Real LUFS (BS.1770-4): K-weight each channel, 400ms blocks @ 100ms hop,
   // channel-weighted mean square, two-stage gating (-70 abs, -10 rel) ----
-  const lufsEstimate = computeIntegratedLufs(ch0, ch1, fs, decoded.numberOfChannels);
+  const lufsEstimate = computeIntegratedLufs(ch0, ch1, fs, channels);
 
   // STAGE 3 — true peak (4x oversampling) + phase correlation.
   onStage?.('truepeak');
@@ -226,9 +273,9 @@ export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) 
     computeSpectrum(ch0, ch1, len, fs);
 
   return {
-    durationSec: decoded.duration,
+    durationSec,
     sampleRate: fs,
-    channels: decoded.numberOfChannels,
+    channels,
     peakDb: round1(peakDb),
     rmsDb: round1(rmsDb),
     lufsEstimate: round1(lufsEstimate),
