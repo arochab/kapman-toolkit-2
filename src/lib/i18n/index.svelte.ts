@@ -195,6 +195,8 @@ const fr: Dict = {
   'pay.waiver': 'Je demande la fourniture immédiate de mes crédits et je reconnais perdre mon droit de rétractation dès qu’un crédit est utilisé (art. L221-28, 13° du Code de la consommation).',
   'pay.order': 'Commander avec obligation de paiement',
   'pay.terms': 'Voir les conditions et le remboursement',
+  'pay.tickFirst': 'Coche la case ci-dessus pour débloquer les packs.',
+  'pay.checkoutError': 'Le paiement n’a pas pu s’ouvrir. Réessaie dans un instant — rien ne t’a été débité.',
   // footer
   'foot.cgv': 'CGV', 'foot.refund': 'Remboursement', 'foot.legal': 'Mentions légales',
   'foot.privacy': 'Confidentialité', 'foot.contact': 'Contact',
@@ -351,6 +353,8 @@ const en: Dict = {
   'pay.waiver': 'I request immediate delivery of my credits and acknowledge I lose my right of withdrawal once a credit is used (art. L221-28, 13° French Consumer Code).',
   'pay.order': 'Order with obligation to pay',
   'pay.terms': 'See the terms and refund policy',
+  'pay.tickFirst': 'Tick the box above to unlock the packs.',
+  'pay.checkoutError': 'Checkout could not open. Try again in a moment — you were not charged.',
   'foot.cgv': 'Terms', 'foot.refund': 'Refunds', 'foot.legal': 'Legal notice',
   'foot.privacy': 'Privacy', 'foot.contact': 'Contact',
 };

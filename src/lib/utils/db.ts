@@ -239,13 +239,28 @@ export async function getCredits(): Promise<number> {
 // CGV version the checkout consent is recorded against. Bump when the CGV change materially.
 export const CGV_VERSION = 'v1';
 
-export async function startCheckout(pack: 'single' | 'five' | 'twelve'): Promise<string | null> {
+export async function startCheckout(pack: 'single' | 'five' | 'twelve'): Promise<string> {
   // consent = the buyer ticked the L221-28 withdrawal-right waiver box (enforced in the UI too).
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: { pack, consent: true, cgvVersion: CGV_VERSION },
   });
-  if (error) return null;
-  return (data?.url as string) ?? null;
+  // Surface the REAL reason instead of returning null (a null used to become a silent dead
+  // click). supabase-js wraps a non-2xx body in error.context (the Response) — read it so a
+  // misconfigured Stripe key / missing env / rejected consent shows an actionable message.
+  if (error) {
+    let detail = error.message || '';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        const body = await ctx.clone().json();
+        if (body?.message || body?.error) detail = body.message || body.error;
+      }
+    } catch { /* keep error.message */ }
+    throw new Error(detail || 'checkout-failed');
+  }
+  const url = data?.url as string | undefined;
+  if (!url) throw new Error('checkout-no-url');
+  return url;
 }
 
 // ---- Admin layer ----

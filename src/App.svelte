@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { supabase } from './lib/supabase/client.js';
   import type { Route, Project, UserRecipeNote } from './lib/types/index.js';
-  import { getFavorites, toggleFavorite, getNotes, saveNote, getProjects, getProjectRecipes, addRecipeToProject, isAdmin } from './lib/utils/db.js';
+  import { getFavorites, toggleFavorite, getNotes, saveNote, getProjects, getProjectRecipes, addRecipeToProject, isAdmin, getCredits } from './lib/utils/db.js';
   import { toast } from './lib/utils/toast.svelte.js';
   import { t } from './lib/i18n/index.svelte.js';
   import Nav from './lib/components/Nav.svelte';
@@ -171,8 +171,28 @@
     // webhook a beat later, so we just reassure; the balance refreshes on next read).
     try {
       const sp = new URLSearchParams(window.location.search);
-      if (sp.has('paid')) toast(t('pay.received'), 'success', 5000);
-      else if (sp.has('canceled')) toast(t('pay.canceled'), 'error', 4000);
+      if (sp.has('paid')) {
+        toast(t('pay.received'), 'success', 5000);
+        // The webhook grants credits a beat after the redirect. The credit balance lives in
+        // AudioAnalyzer's local state and won't re-read on its own, so the buyer would see "0
+        // credits" right after paying ("I paid and got nothing" — trust killer). Poll the
+        // balance and stamp it into sessionStorage; AudioAnalyzer picks it up on mount. As a
+        // belt-and-suspenders, refresh the page once after the grant lands so every view re-reads.
+        void (async () => {
+          for (let i = 0; i < 6; i++) {
+            await new Promise((r) => setTimeout(r, 1500));
+            try {
+              const c = await getCredits();
+              if (c !== 0) {
+                sessionStorage.setItem('cuepoint.creditsHint', String(c));
+                break;
+              }
+            } catch { /* keep polling */ }
+          }
+        })();
+      } else if (sp.has('canceled')) {
+        toast(t('pay.canceled'), 'error', 4000);
+      }
       if (sp.has('paid') || sp.has('canceled')) {
         window.history.replaceState({}, '', window.location.pathname);
       }

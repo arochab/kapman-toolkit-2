@@ -46,8 +46,16 @@
   // Load the signed-in user's coach credit balance so the paywall can show it and gate the
   // free first read. Signed-out users have no balance (the panel invites them to sign in).
   $effect(() => {
-    if (user) { getCredits().then((c) => { credits = c; }).catch(() => {}); }
-    else credits = 0;
+    if (user) {
+      getCredits().then((c) => { credits = c; }).catch(() => {});
+      // After a Stripe purchase, App.svelte polls the new balance and leaves it here so the
+      // buyer sees credits immediately on return (the webhook grants async — without this the
+      // balance would read 0 right after paying: "I paid and got nothing").
+      try {
+        const hint = sessionStorage.getItem('cuepoint.creditsHint');
+        if (hint !== null) { credits = Number(hint); sessionStorage.removeItem('cuepoint.creditsHint'); }
+      } catch { /* sessionStorage unavailable — non-fatal */ }
+    } else credits = 0;
   });
 
   // Genre is asked ONCE, up front (chip row). Pre-selected from last time as a kindness.
@@ -136,6 +144,15 @@
   let buying = $state(false);
   // L221-28 withdrawal-right waiver: must be ticked before any pack can be ordered.
   let waiver = $state(false);
+  // Surfaced under the packs so a failed/blocked checkout is never a silent dead click.
+  let checkoutError = $state('');
+  // Only the owner sees raw server error text (for live diagnosis); buyers see friendly copy.
+  const OWNER_EMAIL = 'adam.chabbi94@gmail.com';
+
+  // Consent must be FRESH per L221-28 transaction: reset the waiver + any error every time the
+  // packs panel opens or closes, so a stale tick or stale error can never carry across.
+  function openPacks() { waiver = false; checkoutError = ''; showPacks = true; }
+  function closePacks() { waiver = false; checkoutError = ''; showPacks = false; }
 
   function coachInputFrom() {
     if (!result || !diagnostics || !mix) return null;
@@ -161,10 +178,10 @@
       finally { coachBusy = false; }
       return;
     }
-    if (!user) { showPacks = true; return; }
+    if (!user) { openPacks(); return; }
     // credits === -1 = unlimited (admins). Only block when a normal user has none left.
     const unlimited = credits === -1;
-    if (!unlimited && credits <= 0) { showPacks = true; return; }
+    if (!unlimited && credits <= 0) { openPacks(); return; }
 
     coachBusy = true; coachText = ''; coachStage = '';
     try {
@@ -177,7 +194,7 @@
     } catch (e) {
       // Payment/credit problem from the server -> show packs; otherwise fall back to free coach.
       coachUsedAI = false;
-      if (String((e as Error)?.message) === 'payment-required') { showPacks = true; coachText = ''; }
+      if (String((e as Error)?.message) === 'payment-required') { openPacks(); coachText = ''; }
       else coachText = await rulesProvider.explain(input);
     } finally {
       coachBusy = false; coachStage = '';
@@ -190,11 +207,19 @@
     // send the producer to the sign-in screen (it lives on the Projects page).
     if (!user) { onNavigate?.('projects'); return; }
     // L221-28: no checkout without the express withdrawal-right waiver (also enforced server-side).
-    if (!waiver) return;
+    if (!waiver) { checkoutError = t('pay.tickFirst'); return; }
     buying = true;
+    checkoutError = '';
     try {
       const url = await startCheckout(pack);
-      if (url) window.location.href = url;
+      window.location.href = url;   // redirect to Stripe Checkout
+    } catch (e) {
+      // Never a silent dead click again: tell the buyer it failed and to retry.
+      console.error('Checkout failed:', e);
+      // For the owner's own account, surface the RAW server reason so he can diagnose live
+      // (missing Stripe key, CORS, bad token…); everyone else gets the friendly message.
+      const raw = (e as Error)?.message || '';
+      checkoutError = user?.email === OWNER_EMAIL && raw ? `debug: ${raw}` : t('pay.checkoutError');
     } finally {
       buying = false;
     }
@@ -299,7 +324,7 @@
     if (envTimer) { clearInterval(envTimer); envTimer = undefined; }
     liveEnergy = 0;
     file = null; result = null; mix = null; memory = null; error = ''; express = false;
-    coachText = ''; showPacks = false; showMore = false;
+    coachText = ''; showPacks = false; waiver = false; checkoutError = ''; showMore = false;
     showFix = false; showMoreRoutes = false; expandedRoute = null; showCharacter = false; showCold = false;
   }
 
@@ -528,25 +553,35 @@
           <div class="packs reveal">
             <p class="coach-title">{t('coach.title')}</p>
             <p class="ash small coach-subtitle">{t('coach.subtitle')}</p>
+
             {#if !user}
-              <button class="link tide" style="margin:14px 0;" onclick={() => onNavigate?.('projects')}>{t('coach.signin')} →</button>
+              <!-- Not signed in: a single clear CTA, no confusing greyed-out packs. -->
+              <button class="link tide" style="margin:16px 0;" onclick={() => onNavigate?.('projects')}>{t('coach.signin')} →</button>
+            {:else}
+              <!-- Order: pre-contractual recap -> consent (REQUIRED) -> packs.
+                   Packs stay CLICKABLE even before consent: a disabled button gives zero
+                   feedback (that was the dead-click bug). Instead buyPack() shows "tick first"
+                   and we flash the waiver row, so the click always says something. -->
+              <p class="ash xsmall coach-fine">{t('pay.recap')}</p>
+              <label class="waiver" class:waiver-flash={!waiver && checkoutError}>
+                <input type="checkbox" bind:checked={waiver} onchange={() => { if (waiver) checkoutError = ''; }} />
+                <span class="ash small">{t('pay.waiver')}</span>
+              </label>
+
+              <div class="pack-list" style="margin-top:16px;">
+                <button class="pack" class:locked={!waiver} disabled={buying} onclick={() => buyPack('single')}>{t('coach.pack1')}</button>
+                <button class="pack pack-default" class:locked={!waiver} disabled={buying} onclick={() => buyPack('five')}>{t('coach.pack5')}</button>
+                <button class="pack" class:locked={!waiver} disabled={buying} onclick={() => buyPack('twelve')}>{t('coach.pack12')}</button>
+              </div>
+              {#if checkoutError}<p class="ash xsmall coach-fine" style="color:var(--color-magenta);">{checkoutError}</p>{/if}
+
+              <p class="ash xsmall coach-fine">{t('pay.order')} · {t('coach.honesty')}</p>
+              <p class="ash xsmall coach-fine">{t('coach.safety')}</p>
             {/if}
-            <div class="pack-list">
-              <button class="pack" disabled={buying || !waiver} onclick={() => buyPack('single')}>{t('coach.pack1')}</button>
-              <button class="pack pack-default" disabled={buying || !waiver} onclick={() => buyPack('five')}>{t('coach.pack5')}</button>
-              <button class="pack" disabled={buying || !waiver} onclick={() => buyPack('twelve')}>{t('coach.pack12')}</button>
-            </div>
-            <!-- Pre-contractual recap + the L221-28 waiver consent. Packs stay disabled until ticked. -->
-            <p class="ash xsmall coach-fine">{t('pay.recap')}</p>
-            <label class="waiver">
-              <input type="checkbox" bind:checked={waiver} />
-              <span class="ash small">{t('pay.waiver')}</span>
-            </label>
-            <p class="ash xsmall coach-fine">{t('pay.order')} · {t('coach.honesty')}</p>
-            <p class="ash xsmall coach-fine">{t('coach.safety')}</p>
+
             <div class="actions" style="margin-top:18px;">
               <button class="link ash" onclick={() => onNavigate?.('legal')}>{t('pay.terms')} →</button>
-              <button class="link ash" onclick={() => showPacks = false}>{t('coach.back')}</button>
+              <button class="link ash" onclick={closePacks}>{t('coach.back')}</button>
             </div>
           </div>
         {/if}
@@ -692,10 +727,16 @@
   .pack:hover { border-color: var(--color-cyan); }
   .pack-default { border: 2px solid var(--color-cyan); }
   .pack:disabled { opacity: .55; cursor: default; }
+  /* "locked" = consent not yet ticked. The pack is still CLICKABLE (so the click can say
+     "tick the box" instead of dying silently); it just looks subdued until consent. */
+  .pack.locked { opacity: .6; }
   .coach-fine { margin: 14px 0 0; line-height: 1.5; }
   .xsmall { font-size: 12px; }
-  .waiver { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 0; cursor: pointer; }
+  .waiver { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 0; cursor: pointer; border-radius: 8px; padding: 6px; margin-left: -6px; transition: background .2s var(--ease-calm); }
   .waiver input { margin-top: 3px; flex-shrink: 0; accent-color: var(--color-cyan); }
+  /* Flash the consent row when the buyer clicked a pack without ticking it. */
+  .waiver-flash { background: color-mix(in srgb, var(--color-cyan) 16%, transparent); animation: waiver-pulse 1.4s var(--ease-calm); }
+  @keyframes waiver-pulse { 0%,100% { background: color-mix(in srgb, var(--color-cyan) 16%, transparent); } 50% { background: color-mix(in srgb, var(--color-cyan) 32%, transparent); } }
 
   .question { font-family: var(--font-serif); font-weight: 300; font-size: clamp(24px, 5vw, 38px); line-height: 1.1; color: var(--color-text); margin: 0; }
   .contents { list-style: none; padding: 0; margin: var(--gap-verse) 0 0; display: flex; flex-direction: column; gap: 32px; }

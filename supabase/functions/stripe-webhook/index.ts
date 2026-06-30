@@ -38,7 +38,16 @@ Deno.serve(async (req) => {
   const credits = Number(session.metadata?.credits ?? "0");
   const consentAt = session.metadata?.consent_at ?? null;   // durable proof of the L221-28 waiver
   const cgvVersion = session.metadata?.cgv_version ?? null;
-  if (!userId || credits <= 0) return new Response("no metadata", { status: 200 });
+  // Bad/missing metadata means a paid session we cannot fulfill. Do NOT ack 200 (that would
+  // tell Stripe "handled" and the buyer silently loses money). Log loudly and return 400 so it
+  // shows as failed in the Stripe dashboard (Stripe retries a bounded number of times, then
+  // flags it for manual review) — money is never lost without a visible trail.
+  if (!userId || !Number.isFinite(credits) || credits <= 0) {
+    console.error("checkout.session.completed with unusable metadata", {
+      event: event.id, session: session.id, userId, credits: session.metadata?.credits,
+    });
+    return new Response("unfulfillable: missing user_id/credits", { status: 400 });
+  }
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
